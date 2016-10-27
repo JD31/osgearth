@@ -52,7 +52,9 @@ namespace osgEarth
         /** Constructor */
         ScreenSpaceLayoutData() :
             _priority(0.0f),
-            _pixelOffset(0, 0) { }
+            _pixelOffset(0, 0),
+            _autoRotate(false),
+            _autoFollowLine(false) { }
 
         /** Decluttering priority - FLT_MAX means don't declutter */
         void setPriority(float value) { _priority = value; }
@@ -62,18 +64,34 @@ namespace osgEarth
         void setPixelOffset(const osg::Vec2s& value) { _pixelOffset = value; }
         const osg::Vec2s& getPixelOffset() const     { return _pixelOffset; }
 
+        /** Wether the label shall follow a given geographic course */
+        void setAutoRotate(bool autoRotate) { _autoRotate = autoRotate; }
+        bool isAutoRotate() const { return _autoRotate; }
+
         /** World point for label rotation reference */
         void setAnchorPoint(const osg::Vec3d& value) { _anchorPoint = value; }
         const osg::Vec3d& getAnchorPoint() const { return _anchorPoint; }
 
-        /** Reference point for label rotation reference */
-        void setProjPoint(const osg::Vec3d& value) { _refPoint = value; }
-        const osg::Vec3d& getProjPoint() const { return _refPoint; }
+        /** Wether the label shall automatically replace itself along a line */
+        void setAutoFollowLine(bool autoFollowLine) { _autoFollowLine = autoFollowLine; }
+        bool isAutoFollowLine() const { return _autoFollowLine; }
+
+        /** Start world point for automatic placement on a line */
+        void setLineStartPoint(const osg::Vec3d& value) { _lineStart = value; }
+        const osg::Vec3d& getLineStartPoint() const { return _lineStart; }
+
+        /**
+         * Stop world point for automatic placement on a line
+         * also used as projection point for label rotation reference
+         */
+        void setLineEndPoint(const osg::Vec3d& value) { _lineEnd = value; }
+        const osg::Vec3d& getLineEndPoint() const { return _lineEnd; }
 
     public:
         float      _priority;
         osg::Vec2s _pixelOffset;
-        osg::Vec3d _anchorPoint, _refPoint;
+        bool       _autoRotate, _autoFollowLine;
+        osg::Vec3d _anchorPoint, _lineStart, _lineEnd;
 
     public:
         virtual ~ScreenSpaceLayoutData() { }

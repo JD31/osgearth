@@ -147,7 +147,7 @@ osgEarth Sample - Annotations
         <feature name="Draped Polygon">
             <srs>wgs84</srs>
             <geometry>
-                POLYGON((-100 47, -100 49, -95 48, -96 45 -98 42))
+                POLYGON((-100 47, -100 49, -95 48, -96 45, -98 42))
             </geometry>
             <style type="text/css">
                 fill:     #ffff007f;
@@ -211,5 +211,32 @@ osgEarth Sample - Annotations
             </style>
         </label>
         
+        <feature name="Line constraint">
+            <srs>wgs84</srs>
+            <geometry>
+                LINESTRING(-130 45, -125 44)
+            </geometry>
+            <style type="text/css">
+                stroke:              #ffffff77;
+                stroke-width:        7;
+                stroke-tessellation-size: 1km;
+                altitude-clamping:   terrain-drape;
+            </style>
+        </feature>
+        <feature name="Label on line constraint">
+            <srs>wgs84</srs>
+            <geometry>
+                LINESTRING(-130 45, -125 44)
+            </geometry>
+            <style type="text/css">
+				text-content:				"Constrained label";
+                text-align:     			center_center;
+				text-auto-offset-alongline:	true;
+				text-auto-rotate-alongline:	true;
+				altitude-clamping: 			terrain;
+				altitude-technique:	 		map;
+            </style>
+        </feature>
+		
     </annotations>
 </map>

@@ -128,7 +128,8 @@ public:
                 context,
                 feature,
                 tempStyle,
-                textPriorityExpr);
+                textPriorityExpr,
+                text->autoOffsetAlongLine().get() );
 
             if ( node )
             {
@@ -148,23 +149,13 @@ public:
     osg::Node* makePlaceNode(FilterContext&     context,
                              Feature*           feature, 
                              const Style&       style, 
-                             NumericExpression& priorityExpr )
+                             NumericExpression& priorityExpr,
+                             bool autoLineFollowing = false)
     {
         osg::Vec3d center = feature->getGeometry()->getBounds().center();
+        GeoPoint geoCenter = buildGeoPoint(center, style.getSymbol<AltitudeSymbol>(), feature->getSRS());
 
-        AltitudeMode mode = ALTMODE_ABSOLUTE;        
-
-        const AltitudeSymbol* alt = style.getSymbol<AltitudeSymbol>();
-        if (alt &&
-           (alt->clamping() == AltitudeSymbol::CLAMP_TO_TERRAIN || alt->clamping() == AltitudeSymbol::CLAMP_RELATIVE_TO_TERRAIN) &&
-           alt->technique() == AltitudeSymbol::TECHNIQUE_SCENE)
-        {
-            mode = ALTMODE_RELATIVE;
-        }                              
-
-        GeoPoint point(feature->getSRS(), center.x(), center.y(), center.z(), mode);        
-
-        PlaceNode* node = new PlaceNode(0L, point, style, context.getDBOptions());
+        PlaceNode* node = new PlaceNode(0L, geoCenter, style, context.getDBOptions());
         
         if ( !priorityExpr.empty() )
         {
@@ -172,9 +163,44 @@ public:
             node->setPriority( val >= 0.0f ? val : FLT_MAX );
         }
 
+        if ( autoLineFollowing && feature->getGeometry()->getComponentType() == Geometry::TYPE_LINESTRING )
+        {
+            const LineString* geomLineString = 0L;
+            if( feature->getGeometry()->getType() == Geometry::TYPE_LINESTRING )
+            {
+                geomLineString = dynamic_cast<const LineString*>( feature->getGeometry() );
+            }
+            else
+            {
+                const MultiGeometry* geomMulti = dynamic_cast<const MultiGeometry*>(feature->getGeometry());
+                if( geomMulti )
+                    geomLineString = dynamic_cast<const LineString*>( geomMulti->getComponents().front().get() );
+            }
+
+            if( geomLineString )
+            {
+                GeoPoint geoStart = buildGeoPoint(geomLineString->front(), style.getSymbol<AltitudeSymbol>(), feature->getSRS(), true);
+                GeoPoint geoEnd = buildGeoPoint(geomLineString->back(), style.getSymbol<AltitudeSymbol>(), feature->getSRS(), true);
+                node->setLineCoords(geoStart, geoEnd);
+            }
+        }
+
         return node;
     }
 
+    GeoPoint buildGeoPoint( const osg::Vec3d& point, const AltitudeSymbol* altSym, const SpatialReference* srs, bool forceAbsolute = false )
+    {
+        AltitudeMode mode = ALTMODE_ABSOLUTE;
+
+        if (! forceAbsolute && altSym &&
+           (altSym->clamping() == AltitudeSymbol::CLAMP_TO_TERRAIN || altSym->clamping() == AltitudeSymbol::CLAMP_RELATIVE_TO_TERRAIN) &&
+           altSym->technique() == AltitudeSymbol::TECHNIQUE_SCENE)
+        {
+            mode = ALTMODE_RELATIVE;
+        }
+
+        return GeoPoint( srs, point.x(), point.y(), point.z(), mode );
+    }
 };
 
 //------------------------------------------------------------------------

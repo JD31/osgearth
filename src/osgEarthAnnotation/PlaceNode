@@ -111,6 +111,11 @@ namespace osgEarth { namespace Annotation
         void setStyle( const Style& style );
         const Style& getStyle() const { return _style; }
 
+        /**
+         * Defines the start and end point of the line for auto placement
+         */
+        void setLineCoords( const GeoPoint& lineStartPoint, const GeoPoint& lineEndPoint );
+
     public: // GeoPositionNode override
 
         virtual void setPriority( float value );
@@ -131,11 +136,10 @@ namespace osgEarth { namespace Annotation
         osg::ref_ptr<const osgDB::Options> _dbOptions;
         osg::ref_ptr<ScreenSpaceLayoutData> _dataLayout;
 
-        /** rotation of the label **/
+        /** rotation of the label and line following **/
         float                    _labelRotationRad;
         bool                     _followFixedCourse;
-        GeoPoint                 _geoPointLoc;
-        GeoPoint                 _geoPointProj;
+        GeoPoint                 _geoPointLoc, _lineStartPoint, _lineEndPoint;
 
         void init();
         void updateLayoutData();

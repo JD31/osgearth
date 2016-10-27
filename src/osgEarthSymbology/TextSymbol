@@ -156,6 +156,20 @@ namespace osgEarth { namespace Symbology
         optional<Encoding>& encoding() { return _encoding; }
         const optional<Encoding>& encoding() const { return _encoding; }
 
+        /**
+         * Whether to enable the automatic label placement along a line and on screen
+         * Note: The feature must be one straigth line and short enough as the algorithm considers it straigth on screen
+         */
+        optional<bool>& autoOffsetAlongLine() { return _autoOffsetAlongLine; }
+        const optional<bool>& autoOffsetAlongLine() const { return _autoOffsetAlongLine; }
+
+        /**
+         * Whether to enable the automatic label rotation along a line
+         * Note: The feature must be one straigth line and short enough as the algorithm considers it straigth on screen
+         */
+        optional<bool>& autoRotateAlongLine() { return _autoRotateAlongLine; }
+        const optional<bool>& autoRotateAlongLine() const { return _autoRotateAlongLine; }
+
     public:
         virtual Config getConfig() const;
         virtual void mergeConfig( const Config& conf );
@@ -181,6 +195,8 @@ namespace osgEarth { namespace Symbology
         optional<bool>              _declutter;
         optional<bool>              _occlusionCull;
         optional<double>            _occlusionCullAltitude;
+        optional<bool>              _autoOffsetAlongLine;
+        optional<bool>              _autoRotateAlongLine;
     };
 
 } } // namespace osgEarth::Symbology

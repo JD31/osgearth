@@ -246,20 +246,6 @@ LabelNode::updateLayoutData()
     
     GeoPoint location = getPosition();
     location.makeGeographic();
-    double latRad;
-    double longRad;
-    GeoMath::destination(osg::DegreesToRadians(location.y()),
-        osg::DegreesToRadians(location.x()),
-        _labelRotationRad,
-        2500.,
-        latRad,
-        longRad);
-
-    _geoPointProj.set(osgEarth::SpatialReference::get("wgs84"),
-        osg::RadiansToDegrees(longRad),
-        osg::RadiansToDegrees(latRad),
-        0,
-        osgEarth::ALTMODE_ABSOLUTE);
 
     _geoPointLoc.set(osgEarth::SpatialReference::get("wgs84"),
         //location.getSRS(),
@@ -275,11 +261,27 @@ LabelNode::updateLayoutData()
         
         if (_followFixedCourse)
         {
+            double latRad;
+            double longRad;
+            GeoMath::destination(osg::DegreesToRadians(location.y()),
+                osg::DegreesToRadians(location.x()),
+                _labelRotationRad,
+                2500.,
+                latRad,
+                longRad);
+
+            _geoPointProj.set(osgEarth::SpatialReference::get("wgs84"),
+                osg::RadiansToDegrees(longRad),
+                osg::RadiansToDegrees(latRad),
+                0,
+                osgEarth::ALTMODE_ABSOLUTE);
+
             osg::Vec3d p0, p1;
             _geoPointLoc.toWorld(p0);
             _geoPointProj.toWorld(p1);
             _dataLayout->setAnchorPoint(p0);
-            _dataLayout->setProjPoint(p1);
+            _dataLayout->setLineEndPoint(p1);
+            _dataLayout->setAutoRotate(true);
         }
     }
 }

@@ -47,7 +47,9 @@ _alignment(rhs._alignment),
 _layout(rhs._layout),
 _declutter(rhs._declutter),
 _occlusionCull(rhs._occlusionCull),
-_occlusionCullAltitude(rhs._occlusionCullAltitude)
+_occlusionCullAltitude(rhs._occlusionCullAltitude),
+_autoOffsetAlongLine(rhs._autoOffsetAlongLine),
+_autoRotateAlongLine(rhs._autoRotateAlongLine)
 {
 }
 
@@ -67,7 +69,9 @@ _declutter            ( true ),
 _occlusionCull        ( false ),
 _occlusionCullAltitude( 200000 ),
 _onScreenRotation     ( 0.0 ),
-_geographicCourse     ( 0.0 )
+_geographicCourse     ( 0.0 ),
+_autoOffsetAlongLine  ( false ),
+_autoRotateAlongLine  ( false )
 {
     mergeConfig(conf);
 }
@@ -140,6 +144,9 @@ TextSymbol::getConfig() const
     conf.addIfSet( "text-occlusion-cull", _occlusionCull );
     conf.addIfSet( "text-occlusion-cull-altitude", _occlusionCullAltitude );
 
+    conf.addIfSet( "auto-offset-alongline", _autoOffsetAlongLine);
+    conf.addIfSet( "auto-rotate-alongline", _autoRotateAlongLine);
+
     return conf;
 }
 
@@ -208,6 +215,9 @@ TextSymbol::mergeConfig( const Config& conf )
 
     conf.getIfSet( "text-occlusion-cull", _occlusionCull );
     conf.getIfSet( "text-occlusion-cull-altitude", _occlusionCullAltitude );
+
+    conf.getIfSet( "auto-offset-alongline", _autoOffsetAlongLine );
+    conf.getIfSet( "auto-rotate-alongline", _autoRotateAlongLine );
 }
 
 
@@ -354,5 +364,11 @@ TextSymbol::parseSLD(const Config& c, Style& style)
     }
     else if ( match(c.key(), "text-geographic-course") ) {
         style.getOrCreate<TextSymbol>()->geographicCourse() = NumericExpression( c.value() );
+    }
+    else if ( match(c.key(), "text-auto-offset-alongline") ) {
+        style.getOrCreate<TextSymbol>()->autoOffsetAlongLine() = as<bool>(c.value(), defaults.autoOffsetAlongLine().get() );
+    }
+    else if ( match(c.key(), "text-auto-rotate-alongline") ) {
+        style.getOrCreate<TextSymbol>()->autoRotateAlongLine() = as<bool>(c.value(), defaults.autoRotateAlongLine().get() );
     }
 }

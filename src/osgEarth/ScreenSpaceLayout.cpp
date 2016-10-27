@@ -225,6 +225,124 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
         //nop
     }
 
+    // Update the offset so that the drawable is always visible and constraint on a line
+    void updateOffsetForAutoLabelOnLine(const osg::BoundingBox& box, const osg::Viewport* vp, const osg::Vec3d& loc, const ScreenSpaceLayoutData* layoutData, const osg::Matrix& camVPW, osg::Vec3f& offset)
+    {
+        // inits
+        float leftMin = /* TODO option_XMin_shift + */ -box.xMin() + offset.x();
+        float rightMax = /* TODO option_XMax_shift + */ vp->width() - box.xMax() + offset.x();
+        float bottomMin = /* TODO option_YMin_shift + */ -box.yMin() + offset.y();
+        float topMax = /* TODO option_YMax_shift + */ vp->height() - box.yMax() + offset.y();
+        bool isResolved = false;
+        bool maxPointIsDef = false;
+        osg::Vec3d linePt;
+
+        // must go to the right
+        if ( loc.x() < leftMin)
+        {
+            linePt = layoutData->getLineEndPoint() * camVPW;
+            if ( linePt.x() < loc.x() )
+                linePt = layoutData->getLineStartPoint() * camVPW;
+            maxPointIsDef = true;
+
+            if ( linePt.x() >= (leftMin - (box.xMax() - box.xMin())) )
+            {
+                float ratio = (leftMin-loc.x()) / (linePt.x()-loc.x());
+                if ( ratio < 1 )
+                    offset.set( leftMin - loc.x(), ratio*(linePt.y() - loc.y()), 0.f );
+                else
+                    offset.set( linePt.x() - loc.x(), linePt.y() - loc.y(), 0.f );
+                isResolved = ratio >= 1.f || (loc.y() + offset.y()) > bottomMin && (loc.y() + offset.y()) < topMax;
+            }
+            else
+            {
+                // out of screen : nothing to do
+                isResolved = true;
+            }
+        }
+
+        // must go up
+        if ( ! isResolved && loc.y() < bottomMin)
+        {
+            if ( ! maxPointIsDef )
+            {
+                linePt = layoutData->getLineEndPoint() * camVPW;
+                if ( linePt.y() < loc.y() )
+                    linePt = layoutData->getLineStartPoint() * camVPW;
+                maxPointIsDef = true;
+            }
+
+            if ( linePt.y() >= (bottomMin - (box.yMax() - box.yMin())) )
+            {
+                float ratio = (bottomMin-loc.y()) / (linePt.y()-loc.y());
+                if ( ratio < 1 )
+                    offset.set( ratio*(linePt.x() - loc.x()), bottomMin - loc.y(), 0.f );
+                else
+                    offset.set( linePt.x() - loc.x(), linePt.y() - loc.y(), 0.f );
+                isResolved = ratio >= 1.f || (loc.x() + offset.x()) > leftMin && (loc.x() + offset.x()) < rightMax;
+            }
+            else
+            {
+                // out of screen : nothing to do
+                isResolved = true;
+            }
+        }
+
+        // must go to the left
+        if ( ! isResolved && loc.x() > rightMax)
+        {
+            if ( ! maxPointIsDef )
+            {
+                linePt = layoutData->getLineEndPoint() * camVPW;
+                if ( linePt.x() > loc.x() )
+                    linePt = layoutData->getLineStartPoint() * camVPW;
+                maxPointIsDef = true;
+            }
+
+            if ( linePt.x() <= (rightMax + (box.xMax() - box.xMin())) )
+            {
+                float ratio = (rightMax - loc.x()) / (linePt.x() - loc.x());
+                if ( ratio < 1 )
+                    offset.set( rightMax - loc.x(), ratio*(linePt.y() - loc.y()), 0.f );
+                else
+                    offset.set( linePt.x() - loc.x(), linePt.y() - loc.y(), 0.f );
+                isResolved = ratio >= 1.f || (loc.y() + offset.y()) > bottomMin && (loc.y() + offset.y()) < topMax;
+            }
+            else
+            {
+                // out of screen : nothing to do
+                isResolved = true;
+            }
+        }
+
+        // must go down
+        if ( ! isResolved && loc.y() > topMax)
+        {
+            if ( ! maxPointIsDef )
+            {
+                linePt = layoutData->getLineEndPoint() * camVPW;
+                if ( linePt.y() > loc.y() )
+                    linePt = layoutData->getLineStartPoint() * camVPW;
+                maxPointIsDef = true;
+            }
+
+            if ( linePt.y() <= (topMax + (box.yMax() - box.yMin())) )
+            {
+                float ratio = (topMax - loc.y()) / (linePt.y() - loc.y());
+                if ( ratio < 1 )
+                    offset.set( ratio*(linePt.x() - loc.x()), topMax - loc.y(), 0.f );
+                else
+                    offset.set( linePt.x() - loc.x(), linePt.y() - loc.y(), 0.f );
+                isResolved = ratio >= 1.f || (loc.x() + offset.x()) > leftMin && (loc.x() + offset.x()) < rightMax;
+            }
+            else
+            {
+                // out of screen : nothing to do
+                isResolved = true;
+            }
+        }
+    }
+
     // override.
     // Sorts the bin. This runs in the CULL thread after the CULL traversal has completed.
     void sortImplementation(osgUtil::RenderBin* bin)
@@ -324,8 +442,9 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
 
             const ScreenSpaceLayoutData* layoutData = dynamic_cast<const ScreenSpaceLayoutData*>(drawable->getUserData());
 
-            // transform the bounding box of the drawable into window-space.
-            osg::BoundingBox box = Utils::getBoundingBox(drawable);
+            // transform the bounding box into window-space.
+            // (use parent bbox for line following algorithm)
+            osg::BoundingBox box = layoutData != 0L && layoutData->isAutoFollowLine() ? drawableParent->asGeode()->getBoundingBox() : Utils::getBoundingBox(drawable);
 
             osg::Vec3f offset;
             osg::Quat rot;
@@ -334,30 +453,31 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
             {
                 // local transformation data
                 // and management of the label orientation (must be always readable)
-
-                bool isText = dynamic_cast<const osgText::Text*>(drawable) != 0L;
-
                 osg::Vec3d loc = layoutData->getAnchorPoint() * camVPW;
-                osg::Vec3d proj = layoutData->getProjPoint() * camVPW;
-                proj -= loc;
-                
-                float angle = atan2(proj.y(), proj.x());
+                float angle = 0;
 
-                if ( isText && (angle < - osg::PI / 2. || angle > osg::PI / 2.) )
+                if ( layoutData->isAutoRotate() )
+                {
+                    osg::Vec3d proj = layoutData->getLineEndPoint() * camVPW;
+                    proj -= loc;
+                    angle = atan2(proj.y(), proj.x());
+                }
+
+                if ( angle < - osg::PI / 2. || angle > osg::PI / 2. )
                 {
                     // avoid the label characters to be inverted:
                     // use a symetric translation and adapt the rotation to be in the desired angles
                     offset.set( -layoutData->_pixelOffset.x() - box.xMax() - box.xMin(),
                                 -layoutData->_pixelOffset.y() - box.yMax() - box.yMin(),
                                 0.f );
-                    angle -= osg::PI;
+                    angle += angle < - osg::PI / 2. ? osg::PI : -osg::PI;
                 }
                 else
                 {
                     offset.set( layoutData->_pixelOffset.x(), layoutData->_pixelOffset.y(), 0.f );
                 }
 
-                // handle the local rotation
+                // handle the local rotation (assume that the angle is between -PI PI)
                 if ( angle != 0.f )
                 {
                     rot.makeRotate ( angle, osg::Vec3d(0, 0, 1) );
@@ -371,7 +491,13 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
                     else
                         box.set( std::min(ld.x(), lu.x()), std::min(lu.y(), ru.y()), 0,
                             std::max(ld.x(), lu.x()), std::max(ld.y(), rd.y()), 0 );
+
+                    offset = rot * offset;
                 }
+
+                // adapt the offset for auto sliding label
+                if ( layoutData->isAutoFollowLine() )
+                    updateOffsetForAutoLabelOnLine( box, vp, loc, layoutData, camVPW, offset );
 
                 offset = refCamScaleMat * offset;
 
@@ -380,6 +506,7 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
                 box.xMax() += offset.x();
                 box.yMin() += offset.y();
                 box.yMax() += offset.y();
+
             }
 
             static osg::Vec4d s_zero_w(0,0,0,1);
@@ -489,7 +616,6 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
             }
             else
             {
-                offset = rot * offset;
                 newModelView.makeTranslate( osg::Vec3f(winPos.x() + offset.x(), winPos.y() + offset.y(), 0) );
                 newModelView.preMultScale( leaf->_modelview->getScale() * refCamScaleMat );
                 newModelView.preMultRotate( rot );
