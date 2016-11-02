@@ -122,7 +122,11 @@ namespace osgEarth
               _outAnimTime          ( 0.00f ),
               _sortByPriority       ( false ),
               _snapToPixel          ( true ),
-              _maxObjects           ( INT_MAX )
+              _maxObjects           ( INT_MAX ),
+              _leftMargin           ( 0 ),
+              _rightMargin          ( 0 ),
+              _topMargin            ( 0 ),
+              _bottomMargin         ( 0 )
         {
             fromConfig(_conf);
         }
@@ -158,6 +162,22 @@ namespace osgEarth
         optional<unsigned>& maxObjects() { return _maxObjects; }
         const optional<unsigned>& maxObjects() const { return _maxObjects; }
 
+        /** X margin on the left used by the auto offset function */
+        optional<float>& leftMargin() { return _leftMargin; }
+        const optional<float>& leftMargin() const { return _leftMargin; }
+
+        /** X margin on the right used by the auto offset function */
+        optional<float>& rightMargin() { return _rightMargin; }
+        const optional<float>& rightMargin() const { return _rightMargin; }
+
+        /** Y margin on the top used by the auto offset function */
+        optional<float>& topMargin() { return _topMargin; }
+        const optional<float>& topMargin() const { return _topMargin; }
+
+        /** Y margin on the bottom used by the auto offset function */
+        optional<float>& bottomMargin() { return _bottomMargin; }
+        const optional<float>& bottomMargin() const { return _bottomMargin; }
+
     public:
 
         Config getConfig() const;
@@ -170,6 +190,10 @@ namespace osgEarth
         optional<bool>     _sortByPriority;
         optional<bool>     _snapToPixel;
         optional<unsigned> _maxObjects;
+        optional<float>    _leftMargin;
+        optional<float>    _rightMargin;
+        optional<float>    _topMargin;
+        optional<float>    _bottomMargin;
 
         void fromConfig( const Config& conf );
     };

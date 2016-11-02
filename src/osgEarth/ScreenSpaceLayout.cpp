@@ -172,6 +172,10 @@ ScreenSpaceLayoutOptions::fromConfig( const Config& conf )
     conf.getIfSet( "sort_by_priority",    _sortByPriority );
     conf.getIfSet( "snap_to_pixel",       _snapToPixel );
     conf.getIfSet( "max_objects",         _maxObjects );
+    conf.getIfSet( "left_margin",         _leftMargin );
+    conf.getIfSet( "right_margin",        _rightMargin );
+    conf.getIfSet( "top_margin",          _topMargin );
+    conf.getIfSet( "bottom_margin",       _bottomMargin );
 }
 
 Config
@@ -185,6 +189,10 @@ ScreenSpaceLayoutOptions::getConfig() const
     conf.addIfSet( "sort_by_priority",    _sortByPriority );
     conf.addIfSet( "snap_to_pixel",       _snapToPixel );
     conf.addIfSet( "max_objects",         _maxObjects );
+    conf.addIfSet( "left_margin",         _leftMargin );
+    conf.addIfSet( "right_margin",        _rightMargin );
+    conf.addIfSet( "top_margin",          _topMargin );
+    conf.addIfSet( "bottom_margin",       _bottomMargin );
     return conf;
 }
 
@@ -229,10 +237,11 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
     void updateOffsetForAutoLabelOnLine(const osg::BoundingBox& box, const osg::Viewport* vp, const osg::Vec3d& loc, const ScreenSpaceLayoutData* layoutData, const osg::Matrix& camVPW, osg::Vec3f& offset)
     {
         // inits
-        float leftMin = /* TODO option_XMin_shift + */ -box.xMin() + offset.x();
-        float rightMax = /* TODO option_XMax_shift + */ vp->width() - box.xMax() + offset.x();
-        float bottomMin = /* TODO option_YMin_shift + */ -box.yMin() + offset.y();
-        float topMax = /* TODO option_YMax_shift + */ vp->height() - box.yMax() + offset.y();
+        const ScreenSpaceLayoutOptions& options = _context->_options;
+        float leftMin = *options.leftMargin() - box.xMin() + offset.x();
+        float rightMax = -*options.rightMargin() + vp->width() - box.xMax() + offset.x();
+        float bottomMin = *options.bottomMargin() - box.yMin() + offset.y();
+        float topMax = -*options.topMargin() + vp->height() - box.yMax() + offset.y();
         bool isResolved = false;
         bool maxPointIsDef = false;
         osg::Vec3d linePt;
@@ -256,7 +265,8 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
             }
             else
             {
-                // out of screen : nothing to do
+                // out of screen : used closest point
+                offset.set( linePt.x() - loc.x(), linePt.y() - loc.y(), 0.f );
                 isResolved = true;
             }
         }
@@ -283,7 +293,8 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
             }
             else
             {
-                // out of screen : nothing to do
+                // out of screen : used closest point
+                offset.set( linePt.x() - loc.x(), linePt.y() - loc.y(), 0.f );
                 isResolved = true;
             }
         }
@@ -310,7 +321,8 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
             }
             else
             {
-                // out of screen : nothing to do
+                // out of screen : used closest point
+                offset.set( linePt.x() - loc.x(), linePt.y() - loc.y(), 0.f );
                 isResolved = true;
             }
         }
@@ -337,7 +349,8 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
             }
             else
             {
-                // out of screen : nothing to do
+                // out of screen : used closest point
+                offset.set( linePt.x() - loc.x(), linePt.y() - loc.y(), 0.f );
                 isResolved = true;
             }
         }
@@ -439,6 +452,7 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
             osgUtil::RenderLeaf* leaf = *i;
             const osg::Drawable* drawable = leaf->getDrawable();
             const osg::Node*     drawableParent = drawable->getParent(0);
+            bool isText = dynamic_cast<const osgText::Text*>(drawable) != 0L;
 
             const ScreenSpaceLayoutData* layoutData = dynamic_cast<const ScreenSpaceLayoutData*>(drawable->getUserData());
 
@@ -463,7 +477,7 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
                     angle = atan2(proj.y(), proj.x());
                 }
 
-                if ( angle < - osg::PI / 2. || angle > osg::PI / 2. )
+                if ( isText && (angle < - osg::PI / 2. || angle > osg::PI / 2.) )
                 {
                     // avoid the label characters to be inverted:
                     // use a symetric translation and adapt the rotation to be in the desired angles
@@ -489,7 +503,7 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
                         box.set( std::min(ld.x(), lu.x()), std::min(ld.y(), rd.y()), 0,
                             std::max(rd.x(), ru.x()), std::max(lu.y(), ru.y()), 0 );
                     else
-                        box.set( std::min(ld.x(), lu.x()), std::min(lu.y(), ru.y()), 0,
+                        box.set( std::min(rd.x(), ru.x()), std::min(lu.y(), ru.y()), 0,
                             std::max(ld.x(), lu.x()), std::max(ld.y(), rd.y()), 0 );
 
                     offset = rot * offset;
@@ -506,7 +520,6 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
                 box.xMax() += offset.x();
                 box.yMin() += offset.y();
                 box.yMax() += offset.y();
-
             }
 
             static osg::Vec4d s_zero_w(0,0,0,1);

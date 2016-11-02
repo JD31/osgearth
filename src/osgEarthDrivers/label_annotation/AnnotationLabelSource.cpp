@@ -123,13 +123,13 @@ public:
                 if ( icon->heading().isSet() )
                     tempStyle.get<IconSymbol>()->heading()->setLiteral( feature->eval(iconHeadingExpr, &context) );
             }
-            
+
             osg::Node* node = makePlaceNode(
                 context,
                 feature,
                 tempStyle,
                 textPriorityExpr,
-                text->autoOffsetAlongLine().get() );
+                text && ( text->autoOffsetAlongLine() == true || text->autoRotateAlongLine() == true ) );
 
             if ( node )
             {
@@ -152,7 +152,7 @@ public:
                              NumericExpression& priorityExpr,
                              bool autoLineFollowing = false)
     {
-        osg::Vec3d center = feature->getGeometry()->getBounds().center();
+        const osg::Vec3d center = feature->getGeometry()->getBounds().center();
         GeoPoint geoCenter = buildGeoPoint(center, style.getSymbol<AltitudeSymbol>(), feature->getSRS());
 
         PlaceNode* node = new PlaceNode(0L, geoCenter, style, context.getDBOptions());
@@ -188,7 +188,7 @@ public:
         return node;
     }
 
-    GeoPoint buildGeoPoint( const osg::Vec3d& point, const AltitudeSymbol* altSym, const SpatialReference* srs, bool forceAbsolute = false )
+    const GeoPoint buildGeoPoint( const osg::Vec3d& point, const AltitudeSymbol* altSym, const SpatialReference* srs, bool forceAbsolute = false )
     {
         AltitudeMode mode = ALTMODE_ABSOLUTE;
 
