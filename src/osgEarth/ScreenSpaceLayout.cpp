@@ -562,11 +562,21 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
                 }
             }            
 
-            if ( s_declutteringEnabledGlobally )
+            // fully out of viewport
+            bool isViewCulled = false;
+            if ( box.xMax() < 0 || box.xMin() > vp->width() || box.yMax() < 0 || box.yMin() > vp->height() )
+            {
+                visible = false;
+                isViewCulled = true;
+            }
+
+            // in viewport : go for decluttering
+            else if ( s_declutteringEnabledGlobally )
             {
                 // A max priority => never occlude.
                 float priority = layoutData ? layoutData->_priority : 0.0f;
 
+                // always visible
                 if ( priority == FLT_MAX )
                 {
                     visible = true;
@@ -616,28 +626,33 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
                 // culled, so put the parent in the parents list so that any future leaves
                 // with the same parent will be trivially rejected
                 culledParents.insert( drawable->getParent(0) );
-                local._failed.push_back( leaf );
+                // add in the failed drawing list only if not out of view
+                if ( ! isViewCulled )
+                    local._failed.push_back( leaf );
             }
 
             // modify the leaf's modelview matrix to correctly position it in the 2D ortho
             // projection when it's drawn later. We'll also preserve the scale.
-            osg::Matrix newModelView;
-            if ( rot.zeroRotation() )
+            if ( ! isViewCulled )
             {
-                newModelView.makeTranslate( osg::Vec3f(winPos.x() + offset.x(), winPos.y() + offset.y(), 0) );
-                newModelView.preMultScale( leaf->_modelview->getScale() * refCamScaleMat );
+                osg::Matrix newModelView;
+                if ( rot.zeroRotation() )
+                {
+                    newModelView.makeTranslate( osg::Vec3f(winPos.x() + offset.x(), winPos.y() + offset.y(), 0) );
+                    newModelView.preMultScale( leaf->_modelview->getScale() * refCamScaleMat );
+                }
+                else
+                {
+                    newModelView.makeTranslate( osg::Vec3f(winPos.x() + offset.x(), winPos.y() + offset.y(), 0) );
+                    newModelView.preMultScale( leaf->_modelview->getScale() * refCamScaleMat );
+                    newModelView.preMultRotate( rot );
+                }
+
+                // Leaf modelview matrixes are shared (by objects in the traversal stack) so we
+                // cannot just replace it unfortunately. Have to make a new one. Perhaps a nice
+                // allocation pool is in order here
+                leaf->_modelview = new osg::RefMatrix( newModelView );
             }
-            else
-            {
-                newModelView.makeTranslate( osg::Vec3f(winPos.x() + offset.x(), winPos.y() + offset.y(), 0) );
-                newModelView.preMultScale( leaf->_modelview->getScale() * refCamScaleMat );
-                newModelView.preMultRotate( rot );
-            }
-            
-            // Leaf modelview matrixes are shared (by objects in the traversal stack) so we 
-            // cannot just replace it unfortunately. Have to make a new one. Perhaps a nice
-            // allocation pool is in order here
-            leaf->_modelview = new osg::RefMatrix( newModelView );
         }
 
         // copy the final draw list back into the bin, rejecting any leaves whose parents
