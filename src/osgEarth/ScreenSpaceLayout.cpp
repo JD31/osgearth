@@ -411,13 +411,14 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
         osg::Vec3f  refCamScale(1.0f, 1.0f, 1.0f);
         osg::Matrix refCamScaleMat;
         osg::Matrix refWindowMatrix = windowMatrix;
+        const osg::Viewport* refVP = vp;
 
         if ( cam->isRenderToTextureCamera() )
         {
             osg::Camera* refCam = dynamic_cast<osg::Camera*>(cam->getUserData());
             if ( refCam )
             {
-                const osg::Viewport* refVP = refCam->getViewport();
+                refVP = refCam->getViewport();
                 refCamScale.set( vp->width() / refVP->width(), vp->height() / refVP->height(), 1.0 );
                 refCamScaleMat.makeScale( refCamScale );
                 refWindowMatrix = refVP->computeWindowMatrix();
@@ -511,9 +512,7 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
 
                 // adapt the offset for auto sliding label
                 if ( layoutData->isAutoFollowLine() )
-                    updateOffsetForAutoLabelOnLine( box, vp, loc, layoutData, camVPW, offset );
-
-                offset = refCamScaleMat * offset;
+                    updateOffsetForAutoLabelOnLine( box, refVP, loc, layoutData, camVPW, offset );
 
                 // handle the local translation
                 box.xMin() += offset.x();
@@ -564,7 +563,7 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
 
             // fully out of viewport
             bool isViewCulled = false;
-            if ( box.xMax() < 0 || box.xMin() > vp->width() || box.yMax() < 0 || box.yMin() > vp->height() )
+            if ( box.xMax() < 0 || box.xMin() > refVP->width() || box.yMax() < 0 || box.yMin() > refVP->height() )
             {
                 visible = false;
                 isViewCulled = true;
@@ -635,6 +634,7 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
             // projection when it's drawn later. We'll also preserve the scale.
             if ( ! isViewCulled )
             {
+                offset = refCamScaleMat * offset;
                 osg::Matrix newModelView;
                 if ( rot.zeroRotation() )
                 {
