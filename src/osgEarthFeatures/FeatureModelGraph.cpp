@@ -89,7 +89,7 @@ namespace
         return str;
     }
 
-    osg::Group* createPagedNode(const osg::BoundingSphered& bs, 
+    PagedLODWithNodeOperations* createPagedNode(const osg::BoundingSphered& bs,
                                 const std::string& uri, 
                                 float minRange, 
                                 float maxRange, 
@@ -119,7 +119,7 @@ namespace
             float value = layout.minExpiryTime() >= 0.0f ? layout.minExpiryTime().get() : FLT_MAX;
             p->setMinimumExpiryTime(0, value);
         }
-            
+
 #endif
 
         // force onto the high-latency thread pool.
@@ -602,7 +602,7 @@ FeatureModelGraph::setupPaging()
     std::string uri = s_makeURI( _uid, 0, 0, 0 );
 
     // bulid the top level Paged LOD:
-    osg::Group* pagedNode = createPagedNode( 
+    PagedLODWithNodeOperations* pagedNode = createPagedNode(
         bs, 
         uri, 
         0.0f, 
@@ -846,7 +846,7 @@ FeatureModelGraph::buildSubTilePagedLODs(unsigned        parentLOD,
                     << "; maxrange = " << maxRange
                     << std::endl;
 
-                osg::Group* pagedNode = createPagedNode( 
+                PagedLODWithNodeOperations* pagedNode = createPagedNode(
                     subtile_bs, 
                     uri, 
                     0.0f, maxRange, 
@@ -856,6 +856,7 @@ FeatureModelGraph::buildSubTilePagedLODs(unsigned        parentLOD,
                     _postMergeOperations.get(),
                     _defaultFileLocationCallback.get(),
                     readOptions);
+                pagedNode->setVisibilityMaxRange(flevel->maxVisibilityRange().get());
 
                 parent->addChild( pagedNode );
             }

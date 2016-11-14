@@ -27,7 +27,8 @@ using namespace osgEarth::Symbology;
 
 FeatureLevel::FeatureLevel( const Config& conf ) :
 _minRange( 0.0f ),
-_maxRange( FLT_MAX )
+_maxRange( FLT_MAX ),
+_maxVisibilityRange( FLT_MAX)
 {
     fromConfig( conf );
 }
@@ -50,6 +51,7 @@ FeatureLevel::fromConfig( const Config& conf )
 {
     conf.getIfSet( "min_range", _minRange );
     conf.getIfSet( "max_range", _maxRange );
+    conf.getIfSet( "max_visibility_range", _maxVisibilityRange );
     conf.getIfSet( "style",     _styleName ); 
     conf.getIfSet( "class",     _styleName ); // alias
 }
@@ -60,6 +62,7 @@ FeatureLevel::getConfig() const
     Config conf( "level" );
     conf.addIfSet( "min_range", _minRange );
     conf.addIfSet( "max_range", _maxRange );
+    conf.addIfSet( "max_visibility_range", _maxVisibilityRange );
     conf.addIfSet( "style",     _styleName );
     return conf;
 }

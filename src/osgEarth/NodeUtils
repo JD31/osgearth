@@ -66,10 +66,23 @@ namespace osgEarth
         virtual bool insertChild( unsigned index, Node* child );
         virtual bool replaceChild( Node* origChild, Node* newChild );
 
+        virtual void traverse(osg::NodeVisitor& nv);
+
+    public:
+
+        void setVisibilityMaxRange( float visibilityMaxRange ) ;
+
     protected:
+
         osg::observer_ptr<RefNodeOperationVector> _postMergeOps;
         
         void runPostMerge( osg::Node* node );
+
+    protected:
+
+        float _visibilityMaxRange;
+        float _currentRange;
+        bool  _isVisible;
     };
 
     /**

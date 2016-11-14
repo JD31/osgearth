@@ -18,6 +18,7 @@
  */
 
 #include <osgEarth/NodeUtils>
+#include <osgEarth/CullingUtils>
 #include <osg/Geode>
 #include <osg/Geometry>
 #include <osg/CullSettings>
@@ -32,7 +33,10 @@ using namespace osgEarth;
 //------------------------------------------------------------------------
 
 PagedLODWithNodeOperations::PagedLODWithNodeOperations( RefNodeOperationVector* postMergeOps ) :
-_postMergeOps( postMergeOps )
+_postMergeOps( postMergeOps ),
+_visibilityMaxRange( FLT_MAX ),
+_currentRange( FLT_MAX),
+_isVisible( true )
 {
     //nop
 }
@@ -50,6 +54,9 @@ PagedLODWithNodeOperations::runPostMerge( osg::Node* node )
         }
         _postMergeOps->mutex().readUnlock();
     }
+
+    // dirty the camera range so as to force a new cull computation
+    _currentRange = FLT_MAX;
 }
 
 
@@ -93,6 +100,57 @@ PagedLODWithNodeOperations::replaceChild( Node* origChild, Node* newChild )
     }
     return ok;
 }
+
+
+void
+PagedLODWithNodeOperations::setVisibilityMaxRange( float visibilityMaxRange )
+{
+    _visibilityMaxRange = visibilityMaxRange;
+
+    // dirty the camera range so as to force a new cull computation
+    _currentRange = FLT_MAX;
+}
+
+
+void
+PagedLODWithNodeOperations::traverse(osg::NodeVisitor& nv)
+{
+    if ( _visibilityMaxRange != FLT_MAX
+            && nv.getVisitorType() == osg::NodeVisitor::CULL_VISITOR )
+    {
+        osgUtil::CullVisitor* cv = Culling::asCullVisitor(nv);
+        osg::Camera* camera = cv->getCurrentCamera();
+
+        // work only on reference camera
+        if( camera && ! camera->isRenderToTextureCamera() )
+        {
+            double alt;
+            if ( camera->getUserValue("range", alt) && _currentRange != alt )
+            {
+                _currentRange = alt;
+                if( _currentRange > _visibilityMaxRange )
+                {
+                    if( _isVisible && getNumChildren() > 0 )
+                    {
+                        getChild(0)->setNodeMask(0);
+                        _isVisible = false;
+                    }
+                }
+                else
+                {
+                    if( ! _isVisible && getNumChildren() > 0 )
+                    {
+                        getChild(0)->setNodeMask(~0);
+                        _isVisible = true;
+                    }
+                }
+            }
+        }
+    }
+
+    osg::PagedLOD::traverse(nv);
+}
+
 
 
 //------------------------------------------------------------------------

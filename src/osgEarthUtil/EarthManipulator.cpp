@@ -24,6 +24,7 @@
 #include <osg/Quat>
 #include <osg/Notify>
 #include <osg/MatrixTransform>
+#include <osg/ValueObject>
 #include <osgUtil/LineSegmentIntersector>
 #include <osgViewer/View>
 #include <iomanip>
@@ -1595,6 +1596,8 @@ EarthManipulator::handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapt
 
     if ( ea.getEventType() == osgGA::GUIEventAdapter::FRAME )
     {
+        view->getCamera()->setUserValue("range", _distance);
+
         _time_s_last_frame = _time_s_now;
         _time_s_now = time_s_now;
         _delta_t = _time_s_now - _time_s_last_frame;
