@@ -236,6 +236,11 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
     // Update the offset so that the drawable is always visible and constraint on a line
     void updateOffsetForAutoLabelOnLine(const osg::BoundingBox& box, const osg::Viewport* vp, const osg::Vec3d& loc, const ScreenSpaceLayoutData* layoutData, const osg::Matrix& camVPW, osg::Vec3f& offset)
     {
+        // impossible to work when z out of [-1 1]
+        // TODO improve
+        if( loc.z() < -1 || loc.z() > 1)
+            return;
+
         // inits
         const ScreenSpaceLayoutOptions& options = _context->_options;
         float leftMin = *options.leftMargin() - box.xMin() + offset.x();
@@ -250,7 +255,7 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
         if ( loc.x() < leftMin)
         {
             linePt = layoutData->getLineEndPoint() * camVPW;
-            if ( linePt.x() < loc.x() )
+            if ( linePt.x() < loc.x() || linePt.z() < -1 || linePt.z() > 1 )
                 linePt = layoutData->getLineStartPoint() * camVPW;
             maxPointIsDef = true;
 
@@ -277,7 +282,7 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
             if ( ! maxPointIsDef )
             {
                 linePt = layoutData->getLineEndPoint() * camVPW;
-                if ( linePt.y() < loc.y() )
+                if ( linePt.y() < loc.y() || linePt.z() < -1 || linePt.z() > 1 )
                     linePt = layoutData->getLineStartPoint() * camVPW;
                 maxPointIsDef = true;
             }
@@ -305,7 +310,7 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
             if ( ! maxPointIsDef )
             {
                 linePt = layoutData->getLineEndPoint() * camVPW;
-                if ( linePt.x() > loc.x() )
+                if ( linePt.x() > loc.x() || linePt.z() < -1 || linePt.z() > 1 )
                     linePt = layoutData->getLineStartPoint() * camVPW;
                 maxPointIsDef = true;
             }
@@ -333,7 +338,7 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
             if ( ! maxPointIsDef )
             {
                 linePt = layoutData->getLineEndPoint() * camVPW;
-                if ( linePt.y() > loc.y() )
+                if ( linePt.y() > loc.y() || linePt.z() < -1 || linePt.z() > 1 )
                     linePt = layoutData->getLineStartPoint() * camVPW;
                 maxPointIsDef = true;
             }
