@@ -394,7 +394,10 @@ _vars( rhs._vars ),
 _value( rhs._value ),
 _infix( rhs._infix ),
 _dirty( rhs._dirty ),
-_uriContext( rhs._uriContext )
+_uriContext( rhs._uriContext ),
+_condVar( rhs._condVar ),
+_condVal( rhs._condVal ),
+_condExprs( rhs._condExprs)
 {
     //nop
 }
@@ -440,6 +443,34 @@ StringExpression::getConfig() const
 void
 StringExpression::init()
 {
+    // Case conditional expression
+    std::vector<std::string> vectorCond;
+    StringTokenizer( _src, vectorCond, "?" );
+    if( vectorCond.size() == 2 )
+    {
+        _condVar = vectorCond[0].substr(1, vectorCond[0].length()-2); //remove []; TODO check []
+        std::string str = vectorCond[1];
+        StringTokenizer( str, vectorCond, "#" );
+        if( vectorCond.size() >= 1 )
+        {
+            std::vector<std::string> vectorCondTmp;
+            _vars.push_back( Variable(_condVar,_infix.size()) );
+            //_infix.push_back( Atom(VARIABLE, _condVar) );
+            _infix.push_back( Atom(VARIABLE, "CONDUNDEF") );
+            for(std::string cond : vectorCond)
+            {
+                StringTokenizer( cond, vectorCondTmp, "=" );
+                if( vectorCondTmp.size() >= 2 )
+                    _condExprs[vectorCondTmp[0]] = StringExpression("\"" + vectorCondTmp[1] + "\"");
+                else
+                    _condExprs["defCond"] = StringExpression("\"" + vectorCondTmp[0] + "\"");
+            }
+        }
+
+        return;
+    }
+
+    // Case non-conditional expression
     bool inQuotes = false;
     int inVar = 0;
     int startPos = 0;
@@ -525,12 +556,53 @@ StringExpression::init()
 void 
 StringExpression::set( const Variable& var, const std::string& value )
 {
+    // Case conditional expression
+    if( ! _condVar.empty() )
+    {
+        if(! _condExprs.empty() )
+        {
+            if( var.first == _condVar && _condVal != value )
+            {
+                ConditionalExprs::iterator i = _condExprs.find( value );
+                if( i == _condExprs.end() )
+                    i = _condExprs.find( "defCond" );
+
+                if( i != _condExprs.end() )
+                {
+                    //TODO recursive call to expression
+                    //i->second.set( _condVar, value );
+                    _condVal = i->first;
+                }
+
+                _dirty = true;
+            }
+
+            else if( ! _condVal.empty() )
+            {
+                ConditionalExprs::iterator i = _condExprs.find( _condVal );
+                if( i == _condExprs.end() )
+                    i = _condExprs.find( "defCond" );
+
+                if( i != _condExprs.end() )
+                {
+                    //TODO recursive call to expression
+                    //i->second.set( var, value );
+                    _dirty = _dirty || i->second._dirty;
+                }
+            }
+        }
+    }
+
+    // Case non conditional expression
+    else
+    {
     Atom& a = _infix[var.second];
     if ( a.second != value )
     {
         a.second = value;
         _dirty = true;
     }
+}
 }
 
 void
@@ -548,7 +620,21 @@ StringExpression::set( const std::string& varName, const std::string& value )
 const std::string&
 StringExpression::eval() const
 {
-    if ( _dirty )
+    // Case conditional expression
+    if( ! _condVar.empty() )
+    {
+        if( _dirty && ! _condVal.empty() )
+        {
+            ConditionalExprs::const_iterator i = _condExprs.find( _condVal );
+            if( i != _condExprs.end() )
+                const_cast<StringExpression*>(this)->_value = i->second.eval();
+
+            const_cast<StringExpression*>(this)->_dirty = false;
+        }
+    }
+
+    // Case non conditional expression
+    else if ( _dirty )
     {
         std::stringstream buf;
         for( AtomVector::const_iterator i = _infix.begin(); i != _infix.end(); ++i )
