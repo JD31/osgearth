@@ -110,6 +110,10 @@ namespace osgEarth { namespace Features
         osg::Geode* processLines           (FeatureList& input, FilterContext& cx);
         osg::Geode* processPolygonizedLines(FeatureList& input, bool twosided, FilterContext& cx);
         osg::Geode* processPoints          (FeatureList& input, FilterContext& cx);
+
+        void calculateStippleGeometries(Geometry* input, const SpatialReference* srs,
+                                        unsigned short pattern, int factor, std::vector<Geometry*> &out_geomList);
+
     };
 
 } } // namespace osgEarth::Features

@@ -30,6 +30,77 @@
 using namespace osgEarth;
 using namespace osgEarth::Features;
 
+namespace {
+
+// Shader for Dashed Line on IOS
+
+const char* dashedLineVertex =
+"#version " GLSL_VERSION_STR "\n"
+
+    "in vec4 osg_Color;\n"
+    "in vec3 osg_Normal;\n"
+    "in vec4 osg_Vertex;\n"
+    "in vec2 osg_MultiTexCoord0;\n"
+    "uniform mat4 osg_ModelViewProjectionMatrix;\n"
+    "uniform mat4 osg_ProjectionMatrix;\n"
+    "#pragma vp_name VP Vertex Shader Main\n"
+
+    "// Vertex stage globals:\n"
+    "vec3 vp_Normal;\n"
+    "vec4 vp_Color;\n"
+    "vec4 vp_Vertex;\n"
+
+    "// Vertex stage outputs:\n"
+
+    "out VP_PerVertex {\n"
+    "    vec3 vp_Normal;\n"
+    "    vec4 vp_Color;\n"
+    "    vec4 vp_Vertex;\n"
+    "    vec2 texCoords;\n"
+    "} vp_out;\n"
+    "void main(void)\n"
+    "{\n"
+    "    vp_Vertex = osg_Vertex;\n"
+    "    vp_Normal = osg_Normal;\n"
+    "    vp_Color  = osg_Color;\n"
+    "    gl_Position = osg_ModelViewProjectionMatrix * vp_Vertex;\n"
+    "    vp_out.vp_Normal = vp_Normal;\n"
+    "    vp_out.vp_Color = vp_Color;\n"
+    "    vp_out.vp_Vertex = vp_Vertex;\n"
+    "    vp_out.texCoords = osg_MultiTexCoord0;\n"
+    "}\n";
+
+    const char* dashedLineFragment =
+    "#version " GLSL_VERSION_STR "\n"
+
+    "precision highp float;\n"
+    "#pragma vp_name VP Fragment Shader Main\n"
+    "// Fragment output\n"
+    "out vec4 vp_FragColor;\n"
+    "// Fragment stage inputs:\n"
+    "in VP_PerVertex { \n"
+    "    vec3 vp_Normal;\n"
+    "    vec4 vp_Color;\n"
+    "    vec4 vp_Vertex;\n"
+    "    vec2 texCoords;\n"
+    "} vp_in;\n"
+    "// Fragment stage globals:\n"
+    "vec3 vp_Normal;\n"
+    "vec4 vp_Color;\n"
+    "vec4 vp_Vertex;\n"
+    "uniform vec3 firstPos;\n"
+    "void main(void)\n"
+    "{\n"
+    "    vp_Normal = vp_in.vp_Normal;\n"
+    "    vp_Color = vp_in.vp_Color;\n"
+    "    vp_Vertex = vp_in.vp_Vertex;\n"
+    "    vp_Normal = normalize(vp_Normal);\n"
+    "    highp float dist = cos(distance(firstPos, vp_Vertex.xyz));\n"
+    "    vp_FragColor = dist < 0.0 ? vec4(0, 0, 0, 0) : vp_Color;\n"
+    "}\n";
+    
+}
+
 /********************************************************************************/
 Filter::~Filter()
 {
@@ -349,6 +420,19 @@ FeaturesToNodeFilter::applyLineSymbology(osg::StateSet*    stateset,
                     line->stroke()->stippleFactor().value(),
                     line->stroke()->stipplePattern().value()),
                 osg::StateAttribute::ON );
+
+#ifdef __IOS__
+
+            osg::Shader* dashedLineVertexObject = new osg::Shader( osg::Shader::VERTEX, std::string(dashedLineVertex));
+            osg::Shader* dashedLineFragmentObject = new osg::Shader( osg::Shader::FRAGMENT, std::string(dashedLineFragment));
+
+            osg::Program* dashedLineProgramObject = new osg::Program;
+
+            dashedLineProgramObject->addShader( dashedLineFragmentObject );
+            dashedLineProgramObject->addShader( dashedLineVertexObject );
+
+            stateset->setAttributeAndModes(dashedLineProgramObject, osg::StateAttribute::ON);
+#endif
         }
     }
 }
