@@ -82,6 +82,10 @@ Stroke::getConfig() const {
     if ( _widthUnits.isSet() )
         conf.add( "width_units", _widthUnits->getAbbr() );
     conf.addIfSet("min_pixels", _minPixels );
+    // Add optionnal secondary color and altitude to display this color
+    conf.addObjIfSet("2", _color2);
+    conf.addIfSet("2-criteria-blw-alt", _color2criteriaBelowAlt);
+
     return conf;
 }
 
@@ -102,4 +106,7 @@ Stroke::mergeConfig( const Config& conf ) {
     if ( conf.hasValue("width_units" ) )
         Units::parse( conf.value("width_units"), _widthUnits.mutable_value() );
     conf.getIfSet("min_pixels", _minPixels );
+    // Add optionnal secondary color and altitude to display this color
+    conf.getObjIfSet("2", _color2);
+    conf.getIfSet("2-criteria-blw-alt", _color2criteriaBelowAlt);
 }
