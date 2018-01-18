@@ -49,7 +49,9 @@ _declutter(rhs._declutter),
 _occlusionCull(rhs._occlusionCull),
 _occlusionCullAltitude(rhs._occlusionCullAltitude),
 _autoOffsetAlongLine(rhs._autoOffsetAlongLine),
-_autoRotateAlongLine(rhs._autoRotateAlongLine)
+_autoOffsetPreferedPosition(rhs._autoOffsetPreferedPosition),
+_autoRotateAlongLine(rhs._autoRotateAlongLine),
+_autoOffsetGeomWKT(rhs.autoOffsetGeomWKT())
 {
 }
 
@@ -71,6 +73,7 @@ _occlusionCullAltitude( 200000 ),
 _onScreenRotation     ( 0.0 ),
 _geographicCourse     ( 0.0 ),
 _autoOffsetAlongLine  ( false ),
+_autoOffsetPreferedPosition  ( CENTER ),
 _autoRotateAlongLine  ( false )
 {
     mergeConfig(conf);
@@ -145,7 +148,11 @@ TextSymbol::getConfig() const
     conf.addIfSet( "text-occlusion-cull-altitude", _occlusionCullAltitude );
 
     conf.addIfSet( "auto-offset-alongline", _autoOffsetAlongLine);
+    conf.addIfSet( "auto-offset-position", "center",  _autoOffsetPreferedPosition, CENTER );
+    conf.addIfSet( "auto-offset-position", "right",  _autoOffsetPreferedPosition, RIGHT );
+    conf.addIfSet( "auto-offset-position", "left",  _autoOffsetPreferedPosition, LEFT );
     conf.addIfSet( "auto-rotate-alongline", _autoRotateAlongLine);
+    conf.addObjIfSet( "auto-offset-support", _autoOffsetGeomWKT );
 
     return conf;
 }
@@ -217,7 +224,11 @@ TextSymbol::mergeConfig( const Config& conf )
     conf.getIfSet( "text-occlusion-cull-altitude", _occlusionCullAltitude );
 
     conf.getIfSet( "auto-offset-alongline", _autoOffsetAlongLine );
+    conf.getIfSet( "auto-offset-position", "center",  _autoOffsetPreferedPosition, CENTER );
+    conf.getIfSet( "auto-offset-position", "right",  _autoOffsetPreferedPosition, RIGHT );
+    conf.getIfSet( "auto-offset-position", "left",  _autoOffsetPreferedPosition, LEFT );
     conf.getIfSet( "auto-rotate-alongline", _autoRotateAlongLine );
+    conf.getObjIfSet( "auto-offset-support", _autoOffsetGeomWKT );
 }
 
 
@@ -368,7 +379,18 @@ TextSymbol::parseSLD(const Config& c, Style& style)
     else if ( match(c.key(), "text-auto-offset-alongline") ) {
         style.getOrCreate<TextSymbol>()->autoOffsetAlongLine() = as<bool>(c.value(), defaults.autoOffsetAlongLine().get() );
     }
+    else if ( match(c.key(), "text-auto-offset-position") ) {
+        if ( match(c.value(), "center") )
+            style.getOrCreate<TextSymbol>()->autoOffsetPreferedPosition() = TextSymbol::CENTER;
+        else if ( match(c.value(), "right" ) )
+            style.getOrCreate<TextSymbol>()->autoOffsetPreferedPosition() = TextSymbol::RIGHT;
+        else if ( match(c.value(), "left" ) )
+            style.getOrCreate<TextSymbol>()->autoOffsetPreferedPosition() = TextSymbol::LEFT;
+    }
     else if ( match(c.key(), "text-auto-rotate-alongline") ) {
         style.getOrCreate<TextSymbol>()->autoRotateAlongLine() = as<bool>(c.value(), defaults.autoRotateAlongLine().get() );
+    }
+    else if ( match(c.key(), "text-auto-offset-support") ) {
+        style.getOrCreate<TextSymbol>()->autoOffsetGeomWKT() = StringExpression( c.value() );
     }
 }
