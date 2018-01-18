@@ -1,5 +1,21 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6.4 FATAL_ERROR)
 
+# Automatically set CMAKE_INSTALL_PREFIX to Dynamo root folder, and add Dynamo root folder to CMAKE_PREFIX_PATH
+# This automatic set is necessary for a from scratch install. However CMAKE_INSTALL_PREFIX must be set manually in QTCreator
+# build options because it will be set by default to value C:/ProgramFiles/Dynamo0
+MESSAGE( "CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
+SET(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/../../)
+MESSAGE( "CMAKE_INSTALL_PREFIX: ${CMAKE_INSTALL_PREFIX}")
+SET(CMAKE_PREFIX_PATH
+    ${CMAKE_PREFIX_PATH}
+    ${CMAKE_INSTALL_PREFIX}
+)
+MESSAGE( "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
+
+set(CMAKE_LIBRARY_ARCHITECTURE "x64")
+
+#SET(ZLIB_LIBRARY "${CMAKE_INSTALL_PREFIX}/lib/")
+
 if(COMMAND cmake_policy)
     # Works around warnings libraries linked against that don't
     # have absolute paths (e.g. -lpthreads)
@@ -79,13 +95,13 @@ OPTION(OSG_BUILD_PLATFORM_IPHONE_SIMULATOR "Enable IPhoneSDK Simulator support" 
 IF(OSG_BUILD_PLATFORM_IPHONE OR OSG_BUILD_PLATFORM_IPHONE_SIMULATOR)
   
   #you need to manually set the default sdk version here
-  SET (IPHONE_SDKVER "6.1")
+  #SET (IPHONE_SDKVER "6.1")
   #the below is taken from ogre, it states the gcc stuff needs to happen before PROJECT() is called. I've no clue if we even need it
   # Force gcc <= 4.2 on iPhone
-  include(CMakeForceCompiler)
-  CMAKE_FORCE_C_COMPILER(llvm-gcc-4.2 GNU)
-  CMAKE_FORCE_CXX_COMPILER(llvm-gcc-4.2 GNU)
-  SET(GCC_THUMB_SUPPORT NO)
+  #include(CMakeForceCompiler)
+  #CMAKE_FORCE_C_COMPILER(llvm-gcc-4.2 GNU)
+  #CMAKE_FORCE_CXX_COMPILER(llvm-gcc-4.2 GNU)
+  #SET(GCC_THUMB_SUPPORT NO)
 
         #set either the device sdk or the simulator sdk. Can't find away to separate these in the same project
         IF(OSG_BUILD_PLATFORM_IPHONE)
@@ -355,8 +371,8 @@ IF(APPLE)
     IF(OSG_BUILD_PLATFORM_IPHONE OR OSG_BUILD_PLATFORM_IPHONE_SIMULATOR)
 
         IF(OSG_BUILD_PLATFORM_IPHONE)
-            SET(CMAKE_OSX_ARCHITECTURES "armv7" CACHE STRING "Build architectures for iOS" FORCE)
-            SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -miphoneos-version-min=4.1 -mno-thumb -arch armv7 -pipe -no-cpp-precomp" CACHE STRING "Flags used by the compiler during all build types." FORCE)
+            #SET(CMAKE_OSX_ARCHITECTURES "armv7" CACHE STRING "Build architectures for iOS" FORCE)
+            #SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -miphoneos-version-min=4.1 -mno-thumb -arch armv7 -pipe -no-cpp-precomp" CACHE STRING "Flags used by the compiler during all build types." FORCE)
         ELSE()
             #simulator uses i386 architectures
             SET(CMAKE_OSX_ARCHITECTURES "i386" CACHE STRING "Build architectures for iOS Simulator" FORCE)
