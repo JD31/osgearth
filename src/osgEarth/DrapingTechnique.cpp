@@ -397,7 +397,16 @@ DrapingTechnique::setUpCamera(OverlayDecorator::TechRTTParams& params)
     OE_WARN << LC << "RTT Picking of draped geometry may not work propertly under OSG < 3.4" << std::endl;
 #endif
 
+#ifdef __IOS__
+    int mainViewportWidth = params._mainCamera->getViewport()->width();
+    int mainViewportHeight = params._mainCamera->getViewport()->height();
+#endif
+    
+#ifdef __IOS__
+    projTexture->setTextureSize( mainViewportWidth, mainViewportHeight );
+#else
     projTexture->setTextureSize( *_textureSize, *_textureSize );
+#endif
     projTexture->setInternalFormat( GL_RGBA );
     projTexture->setSourceFormat( GL_RGBA );
     projTexture->setSourceType( GL_UNSIGNED_BYTE );
@@ -410,16 +419,26 @@ DrapingTechnique::setUpCamera(OverlayDecorator::TechRTTParams& params)
 
     // set up the RTT camera:
     params._rttCamera = new DrapingCamera(); //new osg::Camera();
+    params._rttCamera->setUserData(params._mainCamera);
     params._rttCamera->setClearColor( osg::Vec4f(0,0,0,0) );
     // this ref frame causes the RTT to inherit its viewpoint from above (in order to properly
     // process PagedLOD's etc. -- it doesn't affect the perspective of the RTT camera though)
     params._rttCamera->setReferenceFrame( osg::Camera::ABSOLUTE_RF_INHERIT_VIEWPOINT );
+#ifdef __IOS__
+    params._rttCamera->setViewport( 0, 0, mainViewportWidth, mainViewportHeight );
+#else
     params._rttCamera->setViewport( 0, 0, *_textureSize, *_textureSize );
+#endif
     params._rttCamera->setComputeNearFarMode( osg::CullSettings::DO_NOT_COMPUTE_NEAR_FAR );
     params._rttCamera->setRenderOrder( osg::Camera::PRE_RENDER );
     params._rttCamera->setRenderTargetImplementation( osg::Camera::FRAME_BUFFER_OBJECT );
     params._rttCamera->setImplicitBufferAttachmentMask(0, 0);
+    
+#ifdef __IOS__
+    params._rttCamera->attach( osg::Camera::COLOR_BUFFER1, projTexture, 0, 0, _mipmapping );
+#else
     params._rttCamera->attach( osg::Camera::COLOR_BUFFER0, projTexture, 0, 0, _mipmapping );
+#endif
 
     if ( _attachStencil )
     {
