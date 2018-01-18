@@ -282,6 +282,52 @@ namespace
         return false;
     }
 
+    void removeDuplicates(const std::string &inSource, std::string &patchedSource) {
+        OE_DEBUG << "[removeDuplicates]" << std::endl;
+        //Remove duplicate declarations
+        patchedSource.clear();
+        std::stringstream ss(inSource);
+        std::string line;
+        std::list<std::string> declarations;
+        unsigned int bracket = 0;
+        
+        while (std::getline(ss, line, '\n')) {
+            bool keepLine = true;
+            
+            std::size_t pos;
+            bracket += std::count(line.begin(), line.end(), '{');
+            bracket -= std::count(line.begin(), line.end(), '}');
+            if (((bracket == 0) // not between brackets
+                 && (line.find("(") == std::string::npos) // do not contains parenthesis
+                 && (line.find(")") == std::string::npos))
+                && (((pos = line.find("float ")) != std::string::npos)
+                    || ((pos = line.find("vec3 "))   != std::string::npos)
+                    || ((pos = line.find("vec4 "))   != std::string::npos)
+                    || ((pos = line.find("mat3 "))   != std::string::npos)
+                    || ((pos = line.find("mat4 "))   != std::string::npos)
+                    || ((pos = line.find("#version "))   != std::string::npos))){
+                    //It is a declaration: we search in stored declarations if it exists already
+                    for (std::list<std::string>::const_iterator sli = declarations.begin(); sli != declarations.end() ; ++sli) {
+                        std::string storedDecl = *sli;
+                        if (storedDecl.compare(line.substr(pos)) == 0) {
+                            OE_DEBUG << "Remove line : " << line << std::endl;
+                            keepLine = false;
+                            break;
+                        }
+                    }
+                    if (keepLine) {
+                        //store declaration
+                        declarations.push_back(line.substr(pos));
+                    }
+                }
+            if (keepLine) {
+                patchedSource.append(line + "\n");
+            }
+        }
+        
+        OE_DEBUG << patchedSource << std::endl;
+    }
+
     /**
     * Populates the specified Program with passed-in shaders.
     */
@@ -339,7 +385,11 @@ namespace
             vertBodyText = vertBody.str();
             std::stringstream vertShaderBuf;
             if ( vertVersion > 0 )
+#ifdef OSG_GLES3_AVAILABLE
+                vertShaderBuf << "#version " << GLSL_VERSION_STR << "\n";
+#else
                 vertShaderBuf << "#version " << vertVersion << "\n";
+#endif
             for( HeaderMap::const_iterator h = vertHeaders.begin(); h != vertHeaders.end(); ++h )
                 vertShaderBuf << h->second << "\n";
             vertShaderBuf << vertBodyText << "\n";
@@ -349,11 +399,24 @@ namespace
             fragBodyText = fragBody.str();
             std::stringstream fragShaderBuf;
             if ( fragVersion > 0 )
+#ifdef OSG_GLES3_AVAILABLE
+                fragShaderBuf << "#version " << GLSL_VERSION_STR << "\n";
+#else
                 fragShaderBuf << "#version " << fragVersion << "\n";
+#endif
             for( HeaderMap::const_iterator h = fragHeaders.begin(); h != fragHeaders.end(); ++h )
                 fragShaderBuf << h->second << "\n";
             fragShaderBuf << fragBodyText << "\n";
             fragBodyText = fragShaderBuf.str();
+
+#ifdef OSG_GLES3_AVAILABLE
+            std::string vertBodyTextPatched;
+            std::string fragBodyTextPatched;
+            removeDuplicates(vertBodyText, vertBodyTextPatched);
+            vertBodyText = vertBodyTextPatched;
+            removeDuplicates(fragBodyText, fragBodyTextPatched);
+            fragBodyText = fragBodyTextPatched;
+#endif
 
             // add them to the program.            
             program->addShader( new osg::Shader(osg::Shader::VERTEX, vertBodyText) );
