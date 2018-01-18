@@ -234,12 +234,16 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
     }
 
     // Update the offset so that the drawable is always visible and constraint on a line
-    void updateOffsetForAutoLabelOnLine(const osg::BoundingBox& box, const osg::Viewport* vp, const osg::Vec3d& loc, const ScreenSpaceLayoutData* layoutData, const osg::Matrix& camVPW, osg::Vec3f& offset)
+    void updateOffsetForAutoLabelOnLine(const osg::BoundingBox& box, const osg::Viewport* vp, const osg::Vec3d& loc, const ScreenSpaceLayoutData* layoutData, const osg::Matrix& camVPW, osg::Vec3f& offset, const osg::Vec3d& to)
     {
-        // impossible to work when z out of [-1 1]
+        // impossible to work when z greater then 1
         // TODO improve
-        if( loc.z() < -1 || loc.z() > 1)
+        if( /*loc.z() < -1 ||*/ loc.z() > 1)
             return;
+
+//        OE_WARN << "------------------------------------------\n";
+//        OE_WARN << "loc " << loc.x() << " " << loc.y() << "\n";
+//        OE_WARN << "to " << to.x() << " " << to.y() << "\n";
 
         // inits
         const ScreenSpaceLayoutOptions& options = _context->_options;
@@ -250,13 +254,21 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
         bool isResolved = false;
         bool maxPointIsDef = false;
         osg::Vec3d linePt;
+        bool toIsDef = to.x() != 0. && to.y() != 0. && to.z() != 0.;
 
         // must go to the right
         if ( loc.x() < leftMin)
         {
+            if( toIsDef )
+            {
+                linePt = to;
+            }
+            else
+            {
             linePt = layoutData->getLineEndPoint() * camVPW;
             if ( linePt.x() < loc.x() || linePt.z() < -1 || linePt.z() > 1 )
                 linePt = layoutData->getLineStartPoint() * camVPW;
+            }
             maxPointIsDef = true;
 
             if ( linePt.x() >= (leftMin - (box.xMax() - box.xMin())) )
@@ -281,9 +293,16 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
         {
             if ( ! maxPointIsDef )
             {
+                if( toIsDef )
+                {
+                    linePt = to;
+                }
+                else
+                {
                 linePt = layoutData->getLineEndPoint() * camVPW;
                 if ( linePt.y() < loc.y() || linePt.z() < -1 || linePt.z() > 1 )
                     linePt = layoutData->getLineStartPoint() * camVPW;
+                }
                 maxPointIsDef = true;
             }
 
@@ -309,9 +328,16 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
         {
             if ( ! maxPointIsDef )
             {
+                if( toIsDef )
+                {
+                    linePt = to;
+                }
+                else
+                {
                 linePt = layoutData->getLineEndPoint() * camVPW;
                 if ( linePt.x() > loc.x() || linePt.z() < -1 || linePt.z() > 1 )
                     linePt = layoutData->getLineStartPoint() * camVPW;
+                }
                 maxPointIsDef = true;
             }
 
@@ -337,9 +363,16 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
         {
             if ( ! maxPointIsDef )
             {
+                if( toIsDef )
+                {
+                    linePt = to;
+                }
+                else
+                {
                 linePt = layoutData->getLineEndPoint() * camVPW;
                 if ( linePt.y() > loc.y() || linePt.z() < -1 || linePt.z() > 1 )
                     linePt = layoutData->getLineStartPoint() * camVPW;
+                }
                 maxPointIsDef = true;
             }
 
@@ -417,6 +450,7 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
         osg::Matrix refCamScaleMat;
         osg::Matrix refWindowMatrix = windowMatrix;
         const osg::Viewport* refVP = vp;
+        osg::Vec3d eye, center, up, look;
 
         if ( cam->isRenderToTextureCamera() )
         {
@@ -427,8 +461,16 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
                 refCamScale.set( vp->width() / refVP->width(), vp->height() / refVP->height(), 1.0 );
                 refCamScaleMat.makeScale( refCamScale );
                 refWindowMatrix = refVP->computeWindowMatrix();
+                refCam->getViewMatrixAsLookAt(eye,center,up);
             }
+            }
+        else
+        {
+            cam->getViewMatrixAsLookAt(eye,center,up);
         }
+
+        look = center - eye;
+        look.normalize();
 
         // Track the parent nodes of drawables that are obscured (and culled). Drawables
         // with the same parent node (typically a Geode) are considered to be grouped and
@@ -473,14 +515,65 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
             {
                 // local transformation data
                 // and management of the label orientation (must be always readable)
-                osg::Vec3d loc = layoutData->getAnchorPoint() * camVPW;
                 float angle = 0;
+                osg::Vec3d loc = layoutData->getAnchorPoint() * camVPW;
+                osg::Vec3d to;
 
                 if ( layoutData->isAutoRotate() )
                 {
-                    osg::Vec3d proj = layoutData->getLineEndPoint() * camVPW;
-                    proj -= loc;
-                    angle = atan2(proj.y(), proj.x());
+                    osg::Vec3d anchorLoc = layoutData->getAnchorPoint();
+                    osg::Vec3d anchorTo = layoutData->getLineEndPoint();
+
+                    osg::Vec3d camToAnchorLoc = anchorLoc - eye;
+                    osg::Vec3d camToAnchorTo = anchorTo - eye;
+
+                    bool anchorLocIsBehindCam = camToAnchorLoc * look < 0.;
+                    bool originalLocIsBehindCamera = anchorLocIsBehindCam;
+                    bool anchorToIsBehindCam = camToAnchorTo * look < 0.;
+                    bool invertAngle = false;
+
+                    // check wether one side of the line has a better placement
+                    if( anchorLocIsBehindCam && anchorToIsBehindCam )
+                    {
+                        if( layoutData->isAutoFollowLine() )
+                        {
+                            anchorTo = layoutData->getLineStartPoint();
+                            camToAnchorTo = anchorTo - eye;
+                            anchorToIsBehindCam = camToAnchorTo * look < 0.;
+                            if(! anchorToIsBehindCam )
+                                invertAngle = true;
+                        }
+                    }
+
+                    // Go closer to Anchor To
+                    if( anchorLocIsBehindCam && ! anchorToIsBehindCam )
+                        anchorLoc = anchorLoc + (anchorTo - anchorLoc) * 0.95;
+                    // Go closer to Anchor From
+                    else if( ! anchorLocIsBehindCam && anchorToIsBehindCam )
+                        anchorTo = anchorTo + (anchorLoc - anchorTo) * 0.95;
+
+                    // projection on screen for computing the angle
+                    osg::Vec3d anchorFromProj = anchorLoc * camVPW;
+                    osg::Vec3d anchorToProj = anchorTo * camVPW;
+                    to = anchorToProj;
+                    anchorToProj -= anchorFromProj;
+                    if( invertAngle )
+                        anchorToProj = -anchorToProj;
+                    angle = atan2(anchorToProj.y(), anchorToProj.x());
+
+                    //
+                    if( originalLocIsBehindCamera )
+                    {
+                        anchorToProj.normalize();
+                        anchorToProj *= 10000.;
+                        loc = to - anchorToProj;
+                    }
+                    else if ( anchorToIsBehindCam )
+                    {
+                        anchorToProj.normalize();
+                        anchorToProj *= 10000.;
+                        to = anchorFromProj + anchorToProj;
+                    }
                 }
 
                 if ( isText && (angle < - osg::PI / 2. || angle > osg::PI / 2.) )
@@ -515,9 +608,13 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
                     offset = rot * offset;
                 }
 
+                // check if loc is behind camera
+                //if( (layoutData->getAnchorPoint() - eye) * look < 0 )
+                //    loc = -loc;
+
                 // adapt the offset for auto sliding label
                 if ( layoutData->isAutoFollowLine() )
-                    updateOffsetForAutoLabelOnLine( box, refVP, loc, layoutData, camVPW, offset );
+                    updateOffsetForAutoLabelOnLine( box, refVP, loc, layoutData, camVPW, offset, to );
 
                 // handle the local translation
                 box.xMin() += offset.x();
