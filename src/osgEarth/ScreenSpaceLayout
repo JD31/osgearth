@@ -205,7 +205,8 @@ namespace osgEarth
          * Drawables rendered while this stateset is active will be projected from
          * scene space to 2D screen space with optional decluttering.
          */
-        static void activate(osg::StateSet* stateSet, int binNum =13);
+        static void activate(osg::StateSet* stateSet, int binNum =110);
+
 
         /**
          * Deactivates the use of the screen-space layout engine for a stateset.
