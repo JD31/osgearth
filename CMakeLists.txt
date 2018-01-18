@@ -1,21 +1,5 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6.4 FATAL_ERROR)
 
-# Automatically set CMAKE_INSTALL_PREFIX to Dynamo root folder, and add Dynamo root folder to CMAKE_PREFIX_PATH
-# This automatic set is necessary for a from scratch install. However CMAKE_INSTALL_PREFIX must be set manually in QTCreator
-# build options because it will be set by default to value C:/ProgramFiles/Dynamo0
-MESSAGE( "CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
-SET(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/../../)
-MESSAGE( "CMAKE_INSTALL_PREFIX: ${CMAKE_INSTALL_PREFIX}")
-SET(CMAKE_PREFIX_PATH
-    ${CMAKE_PREFIX_PATH}
-    ${CMAKE_INSTALL_PREFIX}
-)
-MESSAGE( "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
-
-set(CMAKE_LIBRARY_ARCHITECTURE "x64")
-
-#SET(ZLIB_LIBRARY "${CMAKE_INSTALL_PREFIX}/lib/")
-
 if(COMMAND cmake_policy)
     # Works around warnings libraries linked against that don't
     # have absolute paths (e.g. -lpthreads)
