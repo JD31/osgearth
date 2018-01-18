@@ -123,4 +123,10 @@ LineSymbol::parseSLD(const Config& c, Style& style)
     else if ( match(c.key(), "stroke-script") ) {
         style.getOrCreate<LineSymbol>()->script() = StringExpression(c.value());
     }
+    else if( match(c.key(), "stroke-2") ) {
+        style.getOrCreate<LineSymbol>()->stroke()->color2() = Fill(Color(c.value()));
+    }
+    else if( match(c.key(), "stroke-2-criteria-blw-alt") ) {
+        style.getOrCreate<LineSymbol>()->stroke()->color2criteriaBelowAlt() = as<unsigned>(c.value(),0);
+    }
 }
