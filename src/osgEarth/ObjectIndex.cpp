@@ -65,7 +65,11 @@ ObjectIndex::ObjectIndex() :
 _idGen( STARTING_OBJECT_ID )
 {
     _attribName     = "oe_index_objectid_attr";
+#ifdef __IOS__
+    _attribLocation = osg::Drawable::FOG_COORDS;
+#else
     _attribLocation = osg::Drawable::SECONDARY_COLORS;
+#endif
     _oidUniformName = "oe_index_objectid_uniform";
 
     // set up the shader package.
