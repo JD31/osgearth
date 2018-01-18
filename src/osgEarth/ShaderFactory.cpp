@@ -182,7 +182,7 @@ ShaderFactory::createMains(const ShaderComp::FunctionLocationMap&    functions,
         {
             int p=0;
             Variable v;
-            if ( tokens[p] == "flat" || tokens[p] == "nonperspective" || tokens[p] == "smooth" )
+            if ( tokens[p] == "flat" || tokens[p] == "nonperspective" || tokens[p] == "smooth" || tokens[p] == "mediump" )
             {
                 v.interp = tokens[p++];
             }
@@ -270,11 +270,19 @@ ShaderFactory::createMains(const ShaderComp::FunctionLocationMap&    functions,
         buf <<
             "#version " << vs_glsl_version << "\n"
             "#pragma vp_name VP Vertex Shader Main\n"
-            "#extension GL_ARB_gpu_shader5 : enable \n";
+#ifdef OSG_GLES3_AVAILABLE
+        << "//#extension GL_ARB_gpu_shader5 : enable\n";
+#else
+        << "#extension GL_ARB_gpu_shader5 : enable \n";
+#endif
 
         buf << "\n// Vertex stage globals:\n";
-        for(Variables::const_iterator i = vars.begin(); i != vars.end(); ++i)
+        for(Variables::const_iterator i = vars.begin(); i != vars.end(); ++i) {
+#ifdef __IOS__
+            if (i->declaration != "vec2 oe_graticule_coord")
+#endif
             buf << i->declaration << "; \n";
+        }
         
         buf << "\n// Vertex stage outputs:\n";
         if ( hasGS || hasTCS )
@@ -903,7 +911,11 @@ ShaderFactory::createMains(const ShaderComp::FunctionLocationMap&    functions,
 
         buf << "#version " << fs_glsl_version << "\n"
             << "#pragma vp_name VP Fragment Shader Main\n"
+#ifdef OSG_GLES3_AVAILABLE
+        << "//#extension GL_ARB_gpu_shader5 : enable\n";
+#else
             << "#extension GL_ARB_gpu_shader5 : enable \n";
+#endif
 
         // no output stage? Use default output
         if (!outputStage)
@@ -919,8 +931,12 @@ ShaderFactory::createMains(const ShaderComp::FunctionLocationMap&    functions,
             "\n// Fragment stage globals:\n";
 
         // Declare stage globals.
-        for(Variables::const_iterator i = vars.begin(); i != vars.end(); ++i)
+        for(Variables::const_iterator i = vars.begin(); i != vars.end(); ++i) {
+#ifdef __IOS__
+            if (i->declaration != "vec2 oe_graticule_coord")
+#endif
             buf << i->declaration << ";\n";
+        }
 
         if ( coloringStage || lightingStage || outputStage )
         {
