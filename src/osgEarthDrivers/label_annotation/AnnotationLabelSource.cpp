@@ -18,6 +18,7 @@
  */
 #include <osgEarthFeatures/LabelSource>
 #include <osgEarthFeatures/FeatureSourceIndexNode>
+#include <osgEarthFeatures/GeometryUtils>
 #include <osgEarthAnnotation/LabelNode>
 #include <osgEarthAnnotation/PlaceNode>
 #include <osgEarth/DepthOffset>
@@ -63,6 +64,7 @@ public:
         NumericExpression textSizeExpr    ( text ? *text->size()     : NumericExpression() );
         NumericExpression textRotationExpr( text ? *text->onScreenRotation() : NumericExpression() );
         NumericExpression textCourseExpr  ( text ? *text->geographicCourse() : NumericExpression() );
+        StringExpression  textOffsetSupportExpr ( text ? *text->autoOffsetGeomWKT()  : StringExpression() );
         StringExpression  iconUrlExpr     ( icon ? *icon->url()      : StringExpression() );
         NumericExpression iconScaleExpr   ( icon ? *icon->scale()    : NumericExpression() );
         NumericExpression iconHeadingExpr ( icon ? *icon->heading()  : NumericExpression() );
@@ -110,6 +112,9 @@ public:
 
                 if ( text->geographicCourse().isSet() )
                     tempStyle.get<TextSymbol>()->geographicCourse()->setLiteral( feature->eval(textCourseExpr, &context) );
+
+                if ( text->autoOffsetGeomWKT().isSet() )
+                    tempStyle.get<TextSymbol>()->autoOffsetGeomWKT()->setLiteral( feature->eval( textOffsetSupportExpr, &context ) );
             }
 
             if ( icon )
@@ -129,7 +134,8 @@ public:
                 feature,
                 tempStyle,
                 textPriorityExpr,
-                text && ( text->autoOffsetAlongLine() == true || text->autoRotateAlongLine() == true ) );
+                text &&
+                    ( text->autoOffsetAlongLine() == true || text->autoRotateAlongLine() == true || text->autoOffsetGeomWKT().isSet() ) );
 
             if ( node )
             {
@@ -154,35 +160,77 @@ public:
     {
         const osg::Vec3d center = feature->getGeometry()->getBounds().center();
         GeoPoint geoCenter = buildGeoPoint(center, style.getSymbol<AltitudeSymbol>(), feature->getSRS());
+        PlaceNode* node = 0L;
 
-        PlaceNode* node = new PlaceNode(0L, geoCenter, style, context.getDBOptions());
-        
-        if ( !priorityExpr.empty() )
+        if ( autoLineFollowing )
         {
-            float val = feature->eval(priorityExpr, &context);
-            node->setPriority( val >= 0.0f ? val : FLT_MAX );
+            const Geometry* geom = feature->getGeometry();
+            if( style.getSymbol<TextSymbol>()->autoOffsetGeomWKT().isSet() )
+        {
+                StringExpression autoOffset = *(style.getSymbol<TextSymbol>()->autoOffsetGeomWKT());
+                std::string lineSupport = feature->eval(autoOffset, &context);
+                if (! lineSupport.empty() )
+                    geom = osgEarth::Features::GeometryUtils::geometryFromWKT(lineSupport);
         }
 
-        if ( autoLineFollowing && feature->getGeometry()->getComponentType() == Geometry::TYPE_LINESTRING )
-        {
             const LineString* geomLineString = 0L;
-            if( feature->getGeometry()->getType() == Geometry::TYPE_LINESTRING )
+            if( geom && geom->getComponentType() == Geometry::TYPE_LINESTRING )
+        {
+                if( geom->getType() == Geometry::TYPE_LINESTRING)
             {
-                geomLineString = dynamic_cast<const LineString*>( feature->getGeometry() );
+                    geomLineString = dynamic_cast<const LineString*>( geom );
             }
             else
             {
-                const MultiGeometry* geomMulti = dynamic_cast<const MultiGeometry*>(feature->getGeometry());
+                    const MultiGeometry* geomMulti = dynamic_cast<const MultiGeometry*>(geom);
                 if( geomMulti )
                     geomLineString = dynamic_cast<const LineString*>( geomMulti->getComponents().front().get() );
+            }
             }
 
             if( geomLineString )
             {
                 GeoPoint geoStart = buildGeoPoint(geomLineString->front(), style.getSymbol<AltitudeSymbol>(), feature->getSRS(), true);
                 GeoPoint geoEnd = buildGeoPoint(geomLineString->back(), style.getSymbol<AltitudeSymbol>(), feature->getSRS(), true);
+
+                if( style.getSymbol<TextSymbol>()->autoOffsetGeomWKT().isSet() )
+                {
+                    node = new PlaceNode(0L, geoCenter, style, context.getDBOptions());
+                    // Direction to the longest distance
+                    if( (geoStart.vec3d() - geoCenter.vec3d()).length2() > (geoEnd.vec3d() - geoCenter.vec3d()).length2() )
+                        node->setLineCoords(geoEnd, geoStart);
+                    else
                 node->setLineCoords(geoStart, geoEnd);
             }
+                else if( style.getSymbol<TextSymbol>()->autoOffsetPreferedPosition().isSet()
+                        && style.getSymbol<TextSymbol>()->autoOffsetPreferedPosition() == TextSymbol::LEFT )
+                {
+                    node = new PlaceNode(0L, geoStart, style, context.getDBOptions());
+                    node->setLineCoords(geoStart, geoEnd);
+                }
+                else if( style.getSymbol<TextSymbol>()->autoOffsetPreferedPosition().isSet()
+                         && style.getSymbol<TextSymbol>()->autoOffsetPreferedPosition() == TextSymbol::RIGHT )
+                {
+                    node = new PlaceNode(0L, geoEnd, style, context.getDBOptions());
+                    node->setLineCoords(geoEnd, geoStart);
+                }
+                else
+                {
+                    node = new PlaceNode(0L, geoCenter, style, context.getDBOptions());
+                    node->setLineCoords(geoStart, geoEnd);
+                }
+            }
+        }
+
+        else
+        {
+            node = new PlaceNode(0L, geoCenter, style, context.getDBOptions());
+        }
+
+        if ( !priorityExpr.empty() && node != 0L )
+        {
+            float val = feature->eval(priorityExpr, &context);
+            node->setPriority( val >= 0.0f ? val : FLT_MAX );
         }
 
         return node;
