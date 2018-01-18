@@ -818,7 +818,12 @@ ShaderGenerator::processText(const osg::StateSet* ss, osg::ref_ptr<osg::StateSet
         "void " FRAGMENT_FUNCTION "(inout vec4 color)\n"
         "{ \n"
         INDENT MEDIUMP "vec4 texel = texture(" SAMPLER_TEXT ", " TEX_COORD_TEXT ".xy);\n"
+#ifdef OSG_GLES3_AVAILABLE
+        INDENT "color *= texel.rrrr; \n"
+#else
         INDENT "color.a *= texel.a; \n"
+#endif
+
         "}\n";
 
     vp->setFunction( VERTEX_FUNCTION,   vertSrc, ShaderComp::LOCATION_VERTEX_MODEL, 0.5f );
