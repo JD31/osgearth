@@ -38,8 +38,8 @@ namespace
     struct TerrainChangedCallback : public osgEarth::TerrainCallback
     {
         TerrainChangedCallback( PolyhedralLineOfSightNode* los ) : _los(los) { }
-        void onTileAdded(const osgEarth::TileKey& tileKey, osg::Node* terrain, TerrainCallbackContext& ) {
-            _los->terrainChanged( tileKey, terrain );
+        void onTileAdded(const osgEarth::TileKey& tileKey, osg::Node* graph, TerrainCallbackContext& ) {
+            _los->terrainChanged( tileKey, graph );
         }
         PolyhedralLineOfSightNode* _los;
     };
@@ -70,7 +70,7 @@ _distance    ( Distance(50000.0, Units::METERS) )
     _terrainCallback = new TerrainChangedCallback(this);
     
     if ( mapNode )
-        mapNode->getTerrain()->addTerrainCallback( _terrainCallback );
+        mapNode->getTerrain()->addTerrainCallback( _terrainCallback.get() );
 
     osg::StateSet* stateSet = this->getOrCreateStateSet();
     stateSet->setMode( GL_BLEND, 1 );

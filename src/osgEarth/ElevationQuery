@@ -20,16 +20,21 @@
 #define OSGEARTH_ELEVATION_QUERY_H 1
 
 #include <osgEarth/MapFrame>
-#include <osgEarth/Containers>
 #include <osgEarth/ElevationPool>
-#include <osgEarth/DPLineSegmentIntersector>
+#include <osgEarth/Containers>
+#include <osgEarth/ModelLayer>
+#include <osgUtil/LineSegmentIntersector>
 
 namespace osgEarth
 {
     /**
+     * @deprecated - Use ElevationPool instead, via Map::getElevationPool to
+     *    query elevation data, and use Terrain::getHeight to query the in-scene
+     *    terrain graph.
+     *
      * ElevationQuery (EQ) lets you query the elevation at any point on a map.
      *
-     * Rather than intersecting with a loaded scene graph, EQ uses the osgEarth
+     * Rather than intersecting with a loadeEd scene graph, EQ uses the osgEarth
      * engine to directly access the best terrain tile for elevation query. You
      * give it the DEM resolution at which you want an elevation point, and it will
      * access the necessary tile and sample it.
@@ -122,7 +127,7 @@ namespace osgEarth
         std::vector<ModelLayer*> _patchLayers;
 
         // Intersector to query the patch layers
-        osg::ref_ptr<DPLineSegmentIntersector> _patchLayersLSI;
+        osg::ref_ptr<osgUtil::LineSegmentIntersector> _patchLayersLSI;
 
         // Callback to force the intersector to materialize paged model nodes
         osg::ref_ptr<osgUtil::IntersectionVisitor::ReadCallback> _ivrc;

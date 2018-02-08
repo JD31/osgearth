@@ -24,9 +24,10 @@
 #include <osgEarth/Notify>
 #include <osgEarthUtil/EarthManipulator>
 #include <osgEarthUtil/ExampleResources>
-
-#include <osgEarth/Cache>
-#include <osgEarthDrivers/cache_filesystem/FileSystemCache>
+#include <osgEarth/MapNode>
+#include <osgEarth/ThreadingUtils>
+#include <osgEarth/Metrics>
+#include <iostream>
 
 #define LC "[viewer] "
 
@@ -40,8 +41,10 @@ usage(const char* name)
         << "\nUsage: " << name << " file.earth" << std::endl
         << MapNodeHelper().usage() << std::endl;
 
+    getchar();
     return 0;
 }
+
 
 int
 main(int argc, char** argv)
@@ -54,6 +57,8 @@ main(int argc, char** argv)
 
     float vfov = -1.0f;
     arguments.read("--vfov", vfov);
+
+    
 
     // create a viewer:
     osgViewer::Viewer viewer(arguments);
@@ -88,10 +93,12 @@ main(int argc, char** argv)
     if ( node )
     {
         viewer.setSceneData( node );
-        viewer.run();
+        Metrics::run(viewer);
     }
     else
     {
         return usage(argv[0]);
     }
+
+    return 0;
 }

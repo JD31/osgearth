@@ -17,6 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 #include "GeometryCompiler"
+
 #include <osgEarthFeatures/BuildGeometryFilter>
 #include <osgEarthFeatures/BuildTextFilter>
 #include <osgEarthFeatures/AltitudeFilter>
@@ -26,19 +27,21 @@
 #include <osgEarthFeatures/SubstituteModelFilter>
 #include <osgEarthFeatures/TessellateOperator>
 #include <osgEarthFeatures/Session>
+
 #include <osgEarth/Utils>
-#include <osgEarth/AutoScale>
 #include <osgEarth/CullingUtils>
 #include <osgEarth/Registry>
 #include <osgEarth/Capabilities>
 #include <osgEarth/ShaderGenerator>
 #include <osgEarth/ShaderUtils>
 #include <osgEarth/Utils>
+
 #include <osg/MatrixTransform>
 #include <osg/Timer>
 #include <osgDB/WriteFile>
 #include <osgUtil/Optimizer>
 
+#include <cstdlib>
 
 #define LC "[GeometryCompiler] "
 
@@ -70,16 +73,20 @@ _shaderPolicy          ( SHADERPOLICY_GENERATE ),
 _geoInterp             ( GEOINTERP_GREAT_CIRCLE ),
 _optimizeStateSharing  ( true ),
 _optimize              ( false ),
+_optimizeVertexOrdering( true ),
 _validate              ( false ),
-_maxPolyTilingAngle    ( 45.0f )
+_maxPolyTilingAngle    ( 45.0f ),
+_useGPULines           ( false )
 {
-   //nop
+    if (::getenv("OSGEARTH_GPU_SCREEN_SPACE_LINES") != 0L)
+    {
+        _useGPULines.init(true);
+    }
 }
 
 //-----------------------------------------------------------------------
 
 GeometryCompilerOptions::GeometryCompilerOptions(const ConfigOptions& conf) :
-ConfigOptions          ( conf ),
 _maxGranularity_deg    ( s_defaults.maxGranularity().value() ),
 _mergeGeometry         ( s_defaults.mergeGeometry().value() ),
 _clustering            ( s_defaults.clustering().value() ),
@@ -90,10 +97,12 @@ _shaderPolicy          ( s_defaults.shaderPolicy().value() ),
 _geoInterp             ( s_defaults.geoInterp().value() ),
 _optimizeStateSharing  ( s_defaults.optimizeStateSharing().value() ),
 _optimize              ( s_defaults.optimize().value() ),
+_optimizeVertexOrdering( s_defaults.optimizeVertexOrdering().value() ),
 _validate              ( s_defaults.validate().value() ),
-_maxPolyTilingAngle    ( s_defaults.maxPolygonTilingAngle().value() )
+_maxPolyTilingAngle    ( s_defaults.maxPolygonTilingAngle().value() ),
+_useGPULines           ( s_defaults.useGPUScreenSpaceLines().value() )
 {
-    fromConfig(_conf);
+    fromConfig(conf.getConfig());
 }
 
 void
@@ -110,8 +119,10 @@ GeometryCompilerOptions::fromConfig( const Config& conf )
     conf.getIfSet   ( "use_vbo", _useVertexBufferObjects);
     conf.getIfSet   ( "optimize_state_sharing", _optimizeStateSharing );
     conf.getIfSet   ( "optimize", _optimize );
+    conf.getIfSet   ( "optimize_vertex_ordering", _optimizeVertexOrdering);
     conf.getIfSet   ( "validate", _validate );
     conf.getIfSet   ( "max_polygon_tiling_angle", _maxPolyTilingAngle );
+    conf.getIfSet   ( "use_gpu_screen_space_lines", _useGPULines );
 
     conf.getIfSet( "shader_policy", "disable",  _shaderPolicy, SHADERPOLICY_DISABLE );
     conf.getIfSet( "shader_policy", "inherit",  _shaderPolicy, SHADERPOLICY_INHERIT );
@@ -121,7 +132,7 @@ GeometryCompilerOptions::fromConfig( const Config& conf )
 Config
 GeometryCompilerOptions::getConfig() const
 {
-    Config conf = ConfigOptions::getConfig();
+    Config conf;
     conf.addIfSet   ( "max_granularity",  _maxGranularity_deg );
     conf.addIfSet   ( "merge_geometry",   _mergeGeometry );
     conf.addIfSet   ( "clustering",       _clustering );
@@ -133,8 +144,10 @@ GeometryCompilerOptions::getConfig() const
     conf.addIfSet   ( "use_vbo", _useVertexBufferObjects);
     conf.addIfSet   ( "optimize_state_sharing", _optimizeStateSharing );
     conf.addIfSet   ( "optimize", _optimize );
+    conf.addIfSet   ( "optimize_vertex_ordering", _optimizeVertexOrdering);
     conf.addIfSet   ( "validate", _validate );
     conf.addIfSet   ( "max_polygon_tiling_angle", _maxPolyTilingAngle );
+    conf.addIfSet   ( "use_gpu_screen_space_lines", _useGPULines );
 
     conf.addIfSet( "shader_policy", "disable",  _shaderPolicy, SHADERPOLICY_DISABLE );
     conf.addIfSet( "shader_policy", "inherit",  _shaderPolicy, SHADERPOLICY_INHERIT );
@@ -142,12 +155,6 @@ GeometryCompilerOptions::getConfig() const
     return conf;
 }
 
-void
-GeometryCompilerOptions::mergeConfig( const Config& conf )
-{
-    ConfigOptions::mergeConfig( conf );
-    fromConfig( conf );
-}
 
 //-----------------------------------------------------------------------
 
@@ -255,13 +262,14 @@ GeometryCompiler::compile(FeatureList&          workingSet,
     const MarkerSymbol*    marker    = style.get<MarkerSymbol>();    // to be deprecated
     const IconSymbol*      icon      = style.get<IconSymbol>();
     const ModelSymbol*     model     = style.get<ModelSymbol>();
+    const RenderSymbol*    render    = style.get<RenderSymbol>();
 
     // Perform tessellation first.
     if ( line )
     {
         if ( line->tessellation().isSet() )
         {
-            TemplateFeatureFilter<TessellateOperator> filter;
+            TessellateOperator filter;
             filter.setNumPartitions( *line->tessellation() );
             filter.setDefaultGeoInterp( _options.geoInterp().get() );
             sharedCX = filter.push( workingSet, sharedCX );
@@ -269,7 +277,7 @@ GeometryCompiler::compile(FeatureList&          workingSet,
         }
         else if ( line->tessellationSize().isSet() )
         {
-            TemplateFeatureFilter<TessellateOperator> filter;
+            TessellateOperator filter;
             filter.setMaxPartitionSize( *line->tessellationSize() );
             filter.setDefaultGeoInterp( _options.geoInterp().get() );
             sharedCX = filter.push( workingSet, sharedCX );
@@ -436,12 +444,6 @@ GeometryCompiler::compile(FeatureList&          workingSet,
             if ( trackHistory ) history.push_back( "substitute" );
 
             resultGroup->addChild( node );
-
-            // enable auto scaling on the group?
-            if ( model && model->autoScale() == true )
-            {
-                resultGroup->getOrCreateStateSet()->setRenderBinDetails(0, osgEarth::AUTO_SCALE_BIN );
-            }
         }
     }
 
@@ -489,14 +491,22 @@ GeometryCompiler::compile(FeatureList&          workingSet,
         }
 
         BuildGeometryFilter filter( style );
+
         filter.maxGranularity() = *_options.maxGranularity();
         filter.geoInterp()      = *_options.geoInterp();
+        filter.useGPULines()    = *_options.useGPUScreenSpaceLines();
 
         if (_options.maxPolygonTilingAngle().isSet())
             filter.maxPolygonTilingAngle() = *_options.maxPolygonTilingAngle();
 
         if ( _options.featureName().isSet() )
             filter.featureName() = *_options.featureName();
+
+        if (_options.optimizeVertexOrdering().isSet())
+            filter.optimizeVertexOrdering() = *_options.optimizeVertexOrdering();
+
+        if (render && render->maxCreaseAngle().isSet())
+            filter.maxCreaseAngle() = render->maxCreaseAngle().get();
 
         osg::Node* node = filter.push( workingSet, sharedCX );
         if ( node )

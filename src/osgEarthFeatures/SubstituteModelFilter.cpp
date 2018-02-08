@@ -18,24 +18,26 @@
  */
 #include <osgEarthFeatures/SubstituteModelFilter>
 #include <osgEarthFeatures/FeatureSourceIndexNode>
-#include <osgEarthFeatures/Session>
+#include <osgEarthFeatures/FilterContext>
 #include <osgEarthFeatures/GeometryUtils>
+
 #include <osgEarthSymbology/MeshConsolidator>
 #include <osgEarthSymbology/MeshFlattener>
+#include <osgEarthSymbology/StyleSheet>
+
 #include <osgEarth/ECEF>
 #include <osgEarth/VirtualProgram>
 #include <osgEarth/DrawInstanced>
 #include <osgEarth/Capabilities>
 #include <osgEarth/ScreenSpaceLayout>
 #include <osgEarth/CullingUtils>
+#include <osgEarth/NodeUtils>
 
 #include <osg/AutoTransform>
 #include <osg/Drawable>
 #include <osg/Geode>
 #include <osg/MatrixTransform>
 #include <osg/NodeVisitor>
-#include <osg/ShapeDrawable>
-#include <osg/AlphaFunc>
 #include <osg/Billboard>
 
 #define LC "[SubstituteModelFilter] "
@@ -383,7 +385,7 @@ namespace
         osg::ref_ptr< osg::Node > clone = (osg::Node*)node->clone(osg::CopyOp::DEEP_COPY_NODES);
        
         // Now remove any geodes
-        FindNodesVisitor<osg::Geode> findGeodes;
+        osgEarth::FindNodesVisitor<osg::Geode> findGeodes;
         clone->accept(findGeodes);
         for (unsigned int i = 0; i < findGeodes._results.size(); i++)
         {
@@ -478,14 +480,14 @@ SubstituteModelFilter::push(FeatureList& features, FilterContext& context)
     // Process the feature set, using clustering if requested
     bool ok = true;
 
-    process( features, symbol, context.getSession(), attachPoint.get(), newContext );
+    process( features, symbol.get(), context.getSession(), attachPoint.get(), newContext );
     if (_cluster)
     {
         // Extract the unclusterable things
-        osg::ref_ptr< osg::Node > unclusterables = extractUnclusterables(attachPoint);
+        osg::ref_ptr< osg::Node > unclusterables = extractUnclusterables(attachPoint.get());
 
         // We run on the attachPoint instead of the main group so that we don't lose the double precision declocalizer transform.
-        MeshFlattener::run(attachPoint);
+        MeshFlattener::run(attachPoint.get());
 
         // Add the unclusterables back to the attach point after the rest of the graph was flattened.
         if (unclusterables.valid())

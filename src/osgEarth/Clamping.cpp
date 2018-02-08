@@ -20,19 +20,23 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>
 */
 #include <osgEarth/Clamping>
+#include <osgEarth/CullingUtils>
+#include <osgEarth/Registry>
 #include <osg/Drawable>
 #include <osg/NodeVisitor>
 #include <osg/Geode>
 #include <osg/Geometry>
+#include <osgUtil/CullVisitor>
 
 using namespace osgEarth;
 
-const int   Clamping::AnchorAttrLocation        = osg::Drawable::ATTRIBUTE_6;
+int         Clamping::AnchorAttrLocation        = osg::Drawable::ATTRIBUTE_6;
+int         Clamping::HeightsAttrLocation       = osg::Drawable::FOG_COORDS;
+
 const char* Clamping::AnchorAttrName            = "oe_clamp_attrs";
 const char* Clamping::HasAttrsUniformName       = "oe_clamp_hasAttrs";
 const char* Clamping::AltitudeOffsetUniformName = "oe_clamp_altitudeOffset";
 
-const int   Clamping::HeightsAttrLocation       = osg::Drawable::FOG_COORDS;
 const char* Clamping::HeightsAttrName           = "oe_clamp_height";
 
 const float Clamping::ClampToAnchor = 1.0f;
@@ -72,12 +76,10 @@ namespace
             }
         }
 
-        void apply(osg::Geode& geode) 
+        void apply(osg::Drawable& drawable)
         {
-            for(unsigned i=0; i<geode.getNumDrawables(); ++i)
-            {
-                apply( geode.getDrawable(i)->asGeometry() );
-            }
+            osg::Geometry* geom = drawable.asGeometry();
+            if (geom) apply(geom);
         }
     };
 }
@@ -108,7 +110,8 @@ Clamping::installHasAttrsUniform(osg::StateSet* stateset)
 {
     if ( stateset )
     {
-        stateset->addUniform( new osg::Uniform(Clamping::HasAttrsUniformName, true) );
+        stateset->setDefine("OE_CLAMP_HAS_ATTRIBUTES");
+        //stateset->addUniform( new osg::Uniform(Clamping::HasAttrsUniformName, true) );
     }
 }
 
@@ -121,4 +124,133 @@ Clamping::setHeights(osg::Geometry* geom, osg::FloatArray* hats)
         geom->setVertexAttribBinding( HeightsAttrLocation, geom->BIND_PER_VERTEX );
         geom->setVertexAttribNormalize( HeightsAttrLocation, false );
     }
+}
+
+
+
+#undef LC
+#define LC "[ClampingCullSet] "
+
+ClampingCullSet::ClampingCullSet() :
+_frameCulled( true )
+{
+    // nop
+}
+
+void
+ClampingCullSet::push(ClampableNode* node, const osg::NodePath& path, const osg::FrameStamp* fs)
+{
+    // Reset the set if this is the first push after a cull.
+    if ( _frameCulled )
+    {
+        _frameCulled = false;
+        _entries.clear();
+        _bs.init();
+    }
+
+    _entries.push_back( Entry() );
+    Entry& entry = _entries.back();
+    entry._node = node;
+    entry._path.setNodePath( path );
+    entry._matrix = new osg::RefMatrix( osg::computeLocalToWorld(path) );
+    entry._frame = fs ? fs->getFrameNumber() : 0;
+    _bs.expandBy( osg::BoundingSphere(
+        node->getBound().center() * (*entry._matrix.get()),
+        node->getBound().radius() ));
+
+    OE_DEBUG << LC << "Pushed " << node << " on frame " << entry._frame << std::endl;
+}
+
+void
+ClampingCullSet::accept(osg::NodeVisitor& nv)
+{
+    if ( nv.getVisitorType() == nv.CULL_VISITOR )
+    {
+        ProxyCullVisitor* cv = dynamic_cast<ProxyCullVisitor*>(&nv);
+
+        // We will use the visitor's path to prevent doubely-applying the statesets
+        // of common ancestors
+        const osg::NodePath& nvPath = nv.getNodePath();
+
+        int frame = nv.getFrameStamp() ? nv.getFrameStamp()->getFrameNumber() : 0u;
+
+        unsigned passed = 0u;
+
+        for( std::vector<Entry>::iterator entry = _entries.begin(); entry != _entries.end(); ++entry )
+        {
+            if ( frame - entry->_frame > 1 )
+                continue;
+
+            // If there's an active (non-identity matrix), apply it
+            if ( entry->_matrix.valid() )
+            {
+                entry->_matrix->postMult( *cv->getModelViewMatrix() );
+                cv->pushModelViewMatrix( entry->_matrix.get(), osg::Transform::RELATIVE_RF );
+            }
+
+            // After pushing the matrix, we can perform the culling bounds test.
+            if (!cv->isCulledByProxyFrustum(*entry->_node.get()))
+            {
+                // Apply the statesets in the entry's node path, but skip over the ones that are
+                // shared with the current visitor's path since they are already in effect.
+                // Count them so we can pop them later.
+                int numStateSets = 0;
+                osg::RefNodePath nodePath;
+                if ( entry->_path.getRefNodePath(nodePath) )
+                {
+                    for(unsigned i=0; i<nodePath.size(); ++i)
+                    {
+                        if (nodePath[i].valid())
+                        {
+                            if (i >= nvPath.size() || nvPath[i] != nodePath[i].get())
+                            {
+                                osg::StateSet* stateSet = nodePath[i]->getStateSet();
+                                if ( stateSet )
+                                {
+                                    cv->getCullVisitor()->pushStateSet( stateSet );
+                                    ++numStateSets;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Cull the DrapeableNode's children (but not the DrapeableNode itself!)
+                for(unsigned i=0; i<entry->_node->getNumChildren(); ++i)
+                {
+                    entry->_node->getChild(i)->accept( nv );
+                }
+            
+                // pop the same number we pushed
+                for(int i=0; i<numStateSets; ++i)
+                {
+                    cv->getCullVisitor()->popStateSet();
+                }
+
+                ++passed;
+            }
+
+            // pop the model view:
+            if ( entry->_matrix.valid() )
+            {
+                cv->popModelViewMatrix();
+            }
+            
+            //Registry::instance()->startActivity("ClampingCullSet", Stringify() << std::hex << this << std::dec << " / " << passed << "/" << _entries.size());
+        }
+
+        // mark this set so it will reset for the next frame
+        _frameCulled = true;
+    }
+}
+
+ClampingCullSet&
+ClampingManager::get(const osg::Camera* cam)
+{
+    // Known issue: it is possible for a draping cull set to be "orphaned" - this
+    // would happen if the cull set were populated and then not used. This is a
+    // very unlikely scenario (because the scene graph would have to change mid-cull)
+    // but nevertheless possible.
+    //Registry::instance()->startActivity("ClampingManager", Stringify() << _sets.size());
+    return _sets.get(cam);
 }

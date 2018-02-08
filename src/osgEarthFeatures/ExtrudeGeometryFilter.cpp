@@ -19,12 +19,16 @@
 #include <osgEarthFeatures/ExtrudeGeometryFilter>
 #include <osgEarthFeatures/Session>
 #include <osgEarthFeatures/FeatureSourceIndexNode>
-#include <osgEarthSymbology/ResourceCache>
+
+#include <osgEarthSymbology/ResourceLibrary>
+#include <osgEarthSymbology/StyleSheet>
+
 #include <osgEarth/ECEF>
 #include <osgEarth/ImageUtils>
 #include <osgEarth/Clamping>
 #include <osgEarth/Utils>
 #include <osgEarth/Tessellator>
+
 #include <osg/Geode>
 #include <osg/Geometry>
 #include <osg/MatrixTransform>
@@ -162,6 +166,13 @@ ExtrudeGeometryFilter::reset( const FilterContext& context )
 
             // if there's a line symbol, use it to outline the extruded data.
             _outlineSymbol = _style.get<LineSymbol>();
+
+            // ...unless a wall poly symbol overrides it.
+            if (_wallPolygonSymbol.valid() && _wallPolygonSymbol->outline() == false)
+                _outlineSymbol = 0L;
+
+            if (_roofPolygonSymbol.valid() && _roofPolygonSymbol->outline() == false)
+                _outlineSymbol = 0L;
         }
 
         // backup plan for skin symbols:

@@ -33,6 +33,8 @@
 
 #include <osgUtil/CullVisitor>
 
+#include <osg/LOD>
+
 using namespace osgEarth::Drivers::MPTerrainEngine;
 using namespace osgEarth;
 
@@ -100,7 +102,7 @@ SingleKeyNodeFactory::createTile(TileModel*        model,
     }
 #else
     // compile the model into a node:
-    TileNode* tileNode = _modelCompiler->compile(model, _frame, progress);
+    osg::ref_ptr<TileNode> tileNode = _modelCompiler->compile(model, _frame, progress);
 #endif
 
     // see if this tile might have children.
@@ -115,7 +117,7 @@ SingleKeyNodeFactory::createTile(TileModel*        model,
         osg::BoundingSphere bs = tileNode->getBound();
         TilePagedLOD* plod = new TilePagedLOD( _engine->getUID(), _liveTiles.get(), _releaser.get() );
         plod->setCenter  ( bs.center() );
-        plod->addChild   ( tileNode );
+        plod->addChild   ( tileNode.get() );
         plod->setFileName( 1, Stringify() << tileNode->getKey().str() << "." << _engine->getUID() << ".osgearth_engine_mp_tile" );
         
         double rangeFactor = _options.minTileRangeFactor().get();
@@ -221,7 +223,7 @@ SingleKeyNodeFactory::createTile(TileModel*        model,
     }
     else
     {
-        result = tileNode;
+        result = tileNode.release();
     }
 
     return result;

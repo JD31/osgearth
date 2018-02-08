@@ -87,6 +87,20 @@ AnnotationUtils::convertTextSymbolEncoding (const TextSymbol::Encoding encoding)
     return text_encoding;
 }
 
+namespace
+{
+    static int nextPowerOf2(int x)
+    {
+        --x;
+        x |= x >> 1;
+        x |= x >> 2;
+        x |= x >> 4;
+        x |= x >> 8;
+        x |= x >> 16;
+        return x+1;
+    }
+}
+
 osg::Drawable*
 AnnotationUtils::createTextDrawable(const std::string& text,
                                     const TextSymbol*  symbol,
@@ -184,19 +198,19 @@ AnnotationUtils::createTextDrawable(const std::string& text,
 
     t->setAutoRotateToScreen(false);
 
-#if OSG_MIN_VERSION_REQUIRED(3,4,0)
     t->setCullingActive(false);
-#endif
 
     t->setCharacterSizeMode( osgText::Text::OBJECT_COORDS );
-    float size = symbol && symbol->size().isSet() ? (float)(symbol->size()->eval()) : 16.0f;
-    t->setCharacterSize( size );
+    
+    float size = symbol && symbol->size().isSet() ? (float)(symbol->size()->eval()) : 16.0f;    
+
+    t->setCharacterSize( size * Registry::instance()->getDevicePixelRatio() );
     t->setColor( symbol && symbol->fill().isSet() ? symbol->fill()->color() : Color::White );
 
-    osgText::Font* font = 0L;
+    osg::ref_ptr<osgText::Font> font;
     if ( symbol && symbol->font().isSet() )
     {
-        font = osgText::readFontFile( *symbol->font() );
+        font = osgText::readRefFontFile( *symbol->font() );
     }
     if ( !font )
         font = Registry::instance()->getDefaultFont();
@@ -205,12 +219,21 @@ AnnotationUtils::createTextDrawable(const std::string& text,
     {
         t->setFont( font );
 
+        
+#if OSG_VERSION_LESS_THAN(3,5,8)
         // mitigates mipmapping issues that cause rendering artifacts for some fonts/placement
         font->setGlyphImageMargin( 2 );
+#endif
+
+        // OSG 3.4.1+ adds a program, so we remove it since we're using VPs.
+        t->setStateSet(0L);
     }
 
-    t->setFontResolution( size, size );
-    t->setBackdropOffset( (float)t->getFontWidth() / 256.0f, (float)t->getFontHeight() / 256.0f );
+    float resFactor = 2.0f;
+    int res = nextPowerOf2((int)(size*resFactor));
+    t->setFontResolution(res, res);
+    float offsetFactor = 1.0f / (resFactor*256.0f);
+    t->setBackdropOffset( (float)t->getFontWidth() * offsetFactor, (float)t->getFontHeight() * offsetFactor );
 
     if ( symbol && symbol->halo().isSet() )
     {
@@ -278,8 +301,8 @@ AnnotationUtils::createImageGeometry(osg::Image*       image,
     geom->setUseVertexBufferObjects(true);
     geom->setStateSet(dstate);
 
-    float s = scale * image->s();
-    float t = scale * image->t();
+    float s = Registry::instance()->getDevicePixelRatio() * scale * image->s();
+    float t = Registry::instance()->getDevicePixelRatio() * scale * image->t();
 
     float x0 = (float)pixelOffset.x() - s/2.0;
     float y0 = (float)pixelOffset.y() - t/2.0;
@@ -313,7 +336,8 @@ AnnotationUtils::createImageGeometry(osg::Image*       image,
     geom->setColorArray(colors);
     geom->setColorBinding(osg::Geometry::BIND_OVERALL);
 
-    geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::QUADS,0,4));
+    GLushort indices[] = {0,1,2,0,2,3};
+    geom->addPrimitiveSet( new osg::DrawElementsUShort( GL_TRIANGLES, 6, indices ) );
 
     return geom;
 }
@@ -819,30 +843,10 @@ AnnotationUtils::installOverlayParent(osg::Node* node, const Style& style)
     // GPU-clamped geometry
     else if ( ap.gpuClamping )
     {
-        ClampableNode* clampable = new ClampableNode( 0L );
+        ClampableNode* clampable = new ClampableNode();
         clampable->addChild( node );
         node = clampable;
-
-        const RenderSymbol* render = style.get<RenderSymbol>();
-        if ( render && render->depthOffset().isSet() )
-        {
-            clampable->setDepthOffsetOptions( *render->depthOffset() );
-        }
     }
-
-#if 0 // TODO -- constuct a callback instead.
-
-    // scenegraph-clamped geometry
-    else if ( ap.sceneClamping )
-    {
-        // save for later when we need to reclamp the mesh on the CPU
-        _altitude = style.get<AltitudeSymbol>();
-
-        // activate the terrain callback:
-        setCPUAutoClamping( true );
-    }
-
-#endif
 
     return node;
 }

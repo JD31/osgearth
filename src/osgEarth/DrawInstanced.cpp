@@ -74,7 +74,6 @@ namespace
             osg::Vec3d centerView = bbox.center() * ri.getState()->getModelViewMatrix();
             float rangeToBS = (float)-centerView.z() - radius;
 
-#if OSG_MIN_VERSION_REQUIRED(3,3,0)
             // check for inherit mode (3.3.0+ only)
             osg::Camera* cam = ri.getCurrentCamera();
 
@@ -90,7 +89,6 @@ namespace
                     rangeToBS = (float)(-centerRefView.z() - radius);
                 }
             }
-#endif
 
             // these should obviously be programmable
             const float maxDistance = 2000.0f;
@@ -127,28 +125,7 @@ namespace
     };
 
     typedef std::map< osg::ref_ptr<osg::Node>, std::vector<ModelInstance> > ModelInstanceMap;
-    
-    /**
-     * Simple bbox callback to return a static bbox.
-     */
-    struct StaticBoundingBox : public osg::Drawable::ComputeBoundingBoxCallback
-    {
-        osg::BoundingBox _bbox;
-        StaticBoundingBox( const osg::BoundingBox& bbox ) : _bbox(bbox) { }
-        osg::BoundingBox computeBound(const osg::Drawable&) const { return _bbox; }
-    };
 
-    // assume x is positive
-    static int nextPowerOf2(int x)
-    {
-        --x;
-        x |= x >> 1;
-        x |= x >> 2;
-        x |= x >> 4;
-        x |= x >> 8;
-        x |= x >> 16;
-        return x+1;
-    }
 }
 
 //----------------------------------------------------------------------
@@ -158,12 +135,11 @@ ConvertToDrawInstanced::ConvertToDrawInstanced(unsigned                numInstan
                                                const osg::BoundingBox& bbox,
                                                bool                    optimize ) :
 _numInstances    ( numInstances ),
+_bbox(bbox),
 _optimize        ( optimize )
 {
     setTraversalMode( TRAVERSE_ALL_CHILDREN );
     setNodeMaskOverride( ~0 );
-
-    _staticBBoxCallback = new StaticBoundingBox(bbox);
 }
 
 
@@ -182,11 +158,7 @@ ConvertToDrawInstanced::apply( osg::Geode& geode )
                 geom->setUseVertexBufferObjects( true );
             }
 
-            if ( _staticBBoxCallback.valid() )
-            {
-                geom->setComputeBoundingBoxCallback( _staticBBoxCallback.get() ); 
-                geom->dirtyBound();
-            }
+            geom->setInitialBound(_bbox);
 
             // convert to use DrawInstanced
             for( unsigned p=0; p<geom->getNumPrimitiveSets(); ++p )
@@ -278,7 +250,7 @@ DrawInstanced::convertGraphToUseDrawInstanced( osg::Group* parent )
     // place a static bounding sphere on the graph since we intend to alter
     // the structure of the subgraph.
     const osg::BoundingSphere& bs = parent->getBound();
-    parent->setComputeBoundingSphereCallback( new StaticBound(bs) );
+    parent->setInitialBound(bs);
     parent->dirtyBound();
 
     ModelInstanceMap models;
@@ -319,8 +291,9 @@ DrawInstanced::convertGraphToUseDrawInstanced( osg::Group* parent )
 	int maxTBOSize = Registry::capabilities().getMaxTextureBufferSize();
 	// This is the total number of instances it can store
 	// We will iterate below. If the number of instances is larger than the buffer can store
-	// we make more tbos
-	int maxTBOInstancesSize = maxTBOSize/4;// 4 vec4s per matrix.
+    // we make more tbos
+    int matrixSize = 4 * 4 * sizeof(float); // 4 vec4's.
+    int maxTBOInstancesSize = maxTBOSize / matrixSize;
 
     // For each model:
     for( ModelInstanceMap::iterator i = models.begin(); i != models.end(); ++i )
@@ -351,7 +324,7 @@ DrawInstanced::convertGraphToUseDrawInstanced( osg::Group* parent )
 
 		if (instances.size()<maxTBOInstancesSize)
 		{
-			tboSize = nextPowerOf2(instances.size());
+			tboSize = instances.size();
 			numInstancesToStore = instances.size();
 		}
 		else

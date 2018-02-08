@@ -159,8 +159,8 @@ main(int argc, char** argv)
 
     // load the model file into the local coordinate frame, which will be
     // +X=east, +Y=north, +Z=up.
-    osg::Node* model = osgDB::readNodeFile("../data/axes.osgt.(1000).scale.osgearth_shadergen");
-    if ( !model )
+    osg::ref_ptr<osg::Node> model = osgDB::readRefNodeFile("../data/axes.osgt.(1000).scale.osgearth_shadergen");
+    if (!model.valid())
         return usage(argv[0]);
 
     osg::Group* root = new osg::Group();
@@ -169,12 +169,13 @@ main(int argc, char** argv)
     App app;
     app.srs = mapNode->getMapSRS();
     app.geo = new GeoTransform();
-    app.geo->setTerrain( mapNode->getTerrain() );
     app.pat = new osg::PositionAttitudeTransform();
-    app.pat->addChild( model );
+    app.pat->addChild( model.get() );
     app.geo->addChild( app.pat );
 
-    root->addChild( app.geo );
+    // Place your GeoTransform under the map node and it will automatically support clamping.
+    // If you don't do this, you must call setTerrain to get terrain clamping.
+    mapNode->addChild( app.geo );
     
     viewer.setSceneData( root );
     viewer.getCamera()->setNearFarRatio(0.00002);

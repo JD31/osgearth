@@ -6,7 +6,8 @@ $GLSL_DEFAULT_PRECISION_FLOAT
 #pragma vp_order      0.5
 #pragma vp_define     MP_USE_BLENDING
 
-uniform bool oe_isPickCamera;
+#pragma import_defines(OE_IS_PICK_CAMERA, OE_IS_SHADOW_CAMERA, OE_TERRAIN_CAST_SHADOWS)
+
 uniform vec4 oe_terrain_color;
 uniform sampler2D oe_layer_tex;
 uniform int oe_layer_uid;
@@ -18,6 +19,15 @@ in float oe_layer_rangeOpacity;
 
 void oe_mp_apply_coloring(inout vec4 color)
 {
+#if defined(OE_IS_SHADOW_CAMERA) && !defined(OE_TERRAIN_CAST_SHADOWS)
+    discard;
+    return;
+#endif
+
+#ifdef OE_IS_PICK_CAMERA
+    color = vec4(0);
+#else
+
     color = oe_terrain_color.a >= 0.0 ? oe_terrain_color : color;
 
     float applyImagery = oe_layer_uid >= 0 ? 1.0 : 0.0;
@@ -31,8 +41,5 @@ void oe_mp_apply_coloring(inout vec4 color)
     color = texel;
 #endif
 
-    // disable primary coloring for pick cameras. Necessary to support picking of
-    // draped geometry.
-    float pick = oe_isPickCamera ? 1.0 : 0.0;
-    color = mix(color, vec4(0), pick);
+#endif // OE_IS_PICK_CAMERA
 }

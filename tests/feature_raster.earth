@@ -12,6 +12,8 @@ osgEarth Sample - Raster to feature example.
         <url>http://readymap.org/readymap/tiles/1.0.0/116/</url>
     </elevation>
 
+
+    <libraries>osgEarthSplat</libraries>
     
     <image name="CLASSMAP" driver="landuse" shared="true" visible="false" coverage="true" max_data_level="15">
         <base_lod>12</base_lod>
@@ -21,6 +23,7 @@ osgEarth Sample - Raster to feature example.
             <image name="ESA" driver="gdal" coverage="true">
                 <url>H:/data/esa/GLOBCOVER_L4_200901_200912_V2.3_Ant_tiled.tif</url>
                 <warp>0.01</warp>
+                <profile>global-geodetic</profile>
             </image>
         </images>
         <shared_sampler> landUseTex       </shared_sampler>
@@ -76,44 +79,30 @@ osgEarth Sample - Raster to feature example.
         </styles>  
 
     </model>
+    
+    
+    <image name="ReadyMap 15m" driver="tms" opacity="0.8">
+        <url>http://readymap.org/readymap/tiles/1.0.0/7/</url>
+    </image>
+  
+    <viewpoints>            
+        <viewpoint name="Trees 1">
+          <heading>-66.2945</heading>
+          <pitch>-14.0905</pitch>
+          <range>3408.89m</range>
+          <long>-121.7544800272052</long>
+          <lat>46.7792209225515</lat>
+          <height>1445.844014885835</height>
+        </viewpoint>
+        
+        <viewpoint name="Trees 2">              
+          <heading>12.2384</heading>
+          <pitch>-4.26323</pitch>
+          <range>1421.77m</range>
+          <long>-121.8282019325911</long>
+          <lat>46.65132101133439</lat>
+          <height>1128.989560711198</height>
+        </viewpoint>
+    </viewpoints>
 
-    <extensions> 
-      
-         <splat>        
-            <coverage>
-                <layer> CLASSMAP </layer>
-                <legend>../data/splat/GLOBCOVER_legend.xml</legend>
-            </coverage>
-            
-            <zones>
-                <zone name="default" doc="Default Climate Zone">            
-                    <surface>
-                        <catalog>../data/splat/splat_catalog.xml</catalog>
-                    </surface>
-                </zone>                
-            </zones>
-            
-        </splat>
-
-        <viewpoints>            
-            <viewpoint name="Trees 1">
-              <heading>-66.2945</heading>
-              <pitch>-14.0905</pitch>
-              <range>3408.89m</range>
-              <long>-121.7544800272052</long>
-              <lat>46.7792209225515</lat>
-              <height>1445.844014885835</height>
-            </viewpoint>
-            
-            <viewpoint name="Trees 2">              
-              <heading>12.2384</heading>
-              <pitch>-4.26323</pitch>
-              <range>1421.77m</range>
-              <long>-121.8282019325911</long>
-              <lat>46.65132101133439</lat>
-              <height>1128.989560711198</height>
-            </viewpoint>
-        </viewpoints>
-               
-    </extensions>
 </map>

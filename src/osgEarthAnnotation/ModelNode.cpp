@@ -26,11 +26,11 @@
 #include <osgEarthAnnotation/GeoPositionNodeAutoScaler>
 #include <osgEarthSymbology/Style>
 #include <osgEarthSymbology/InstanceSymbol>
-#include <osgEarth/AutoScale>
 #include <osgEarth/Registry>
 #include <osgEarth/Capabilities>
 #include <osgEarth/ShaderGenerator>
 #include <osgEarth/VirtualProgram>
+#include <osgEarth/NodeUtils>
 
 #define LC "[ModelNode] "
 
@@ -45,7 +45,7 @@ using namespace osgEarth::Symbology;
 ModelNode::ModelNode(MapNode*              mapNode,
                      const Style&          style,
                      const osgDB::Options* dbOptions ) :
-GeoPositionNode    ( mapNode, GeoPoint() ),
+GeoPositionNode( mapNode ),
 _style       ( style ),
 _dbOptions   ( dbOptions )
 {
@@ -58,6 +58,7 @@ ModelNode::setStyle(const Style& style)
 {
     _style = style;
     init();
+    setPosition(getPosition());
 }
 
 void
@@ -142,6 +143,7 @@ ModelNode::init()
                 // auto scaling?
                 if ( sym->autoScale() == true )
                 {
+                    this->setCullingActive(false);
                     this->addCullCallback( new GeoPositionNodeAutoScaler( osg::Vec3d(1,1,1), sym->minAutoScale().value(), sym->maxAutoScale().value() ));
                 } 
 
@@ -194,6 +196,7 @@ _dbOptions   ( dbOptions )
         _style.getOrCreate<ModelSymbol>()->url() = StringExpression(uri);
 
     init();
+    setPosition(getPosition());
 }
 
 Config

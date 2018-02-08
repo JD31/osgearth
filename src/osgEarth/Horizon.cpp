@@ -26,7 +26,10 @@
 
 #define LC "[Horizon] "
 
-#define OSGEARTH_HORIZON_UDC_NAME "osgEarth.Horizon"
+namespace
+{
+    const std::string OSGEARTH_HORIZON_UDC_NAME = "osgEarth.Horizon";
+}
 
 using namespace osgEarth;
 
@@ -395,10 +398,8 @@ HorizonCullCallback::operator()(osg::Node* node, osg::NodeVisitor* nv)
             if ( _proxy.lock(proxy) )
             {
                 if ( isVisible(proxy.get(), nv) )
-                {
                     traverse(node, nv);
-                    return;
-                }
+                return;
             }
         }
 

@@ -17,6 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 #include <osgEarthFeatures/Filter>
+#include <osgEarthFeatures/FilterContext>
 #include <osgEarthSymbology/LineSymbol>
 #include <osgEarthSymbology/PointSymbol>
 #include <osgEarth/ECEF>
@@ -174,7 +175,8 @@ FeatureFilterRegistry::create(const Config& conf, const osgDB::Options* dbo)
         dbopt->setPluginData( FEATURE_FILTER_OPTIONS_TAG, (void*)&options );
 
         std::string driverExt = std::string( ".osgearth_featurefilter_" ) + driver;
-        result = dynamic_cast<FeatureFilter*>( osgDB::readObjectFile( driverExt, dbopt.get() ) );
+        osg::ref_ptr<osg::Object> object = osgDB::readRefObjectFile( driverExt, dbopt.get() );
+        result = dynamic_cast<FeatureFilter*>( object.release() );
     }
 
     if ( !result.valid() )
@@ -214,9 +216,12 @@ FeaturesToNodeFilter::computeLocalizers( const FilterContext& context, const osg
 {
     if ( context.isGeoreferenced() )
     {
-        if ( context.getSession()->getMapInfo().isGeocentric() )
+        bool ecef = context.getOutputSRS()->isGeographic();
+
+        if (ecef)
         {
-            const SpatialReference* geogSRS = context.profile()->getSRS()->getGeographicSRS();
+
+            const SpatialReference* geogSRS = context.getOutputSRS()->getGeographicSRS();
             GeoExtent geodExtent = extent.transform( geogSRS );
             if ( geodExtent.width() < 180.0 )
             {

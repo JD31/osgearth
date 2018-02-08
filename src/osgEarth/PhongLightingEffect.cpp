@@ -19,7 +19,6 @@
 * You should have received a copy of the GNU Lesser General Public License
 * along with this program.  If not, see <http://www.gnu.org/licenses/>
 */
-
 #include <osgEarth/PhongLightingEffect>
 #include <osgEarth/Registry>
 #include <osgEarth/Capabilities>
@@ -27,6 +26,7 @@
 #include <osgEarth/StringUtils>
 #include <osgEarth/VirtualProgram>
 #include <osgEarth/Shaders>
+#include <osgEarth/Lighting>
 
 // GL_LIGHTING is not always defined on GLES so define it.
 #ifndef GL_LIGHTING
@@ -51,20 +51,21 @@ void
 PhongLightingEffect::init()
 {
     _supported = Registry::capabilities().supportsGLSL();
-    if ( _supported )
-    {
-        _lightingUniform = Registry::shaderFactory()->createUniformForGLMode( GL_LIGHTING, 1 );
-    }
+    // Replaced with setDefine
+    //if ( _supported )
+    //{
+    //    _lightingUniform = Registry::shaderFactory()->createUniformForGLMode( GL_LIGHTING, 1 );
+    //}
 }
 
-void
-PhongLightingEffect::setCreateLightingUniform(bool value)
-{
-    if ( !value )
-    {        
-        _lightingUniform = 0L;
-    }
-}
+//void
+//PhongLightingEffect::setCreateLightingUniform(bool value)
+//{
+//    if ( !value )
+//    {        
+//        _lightingUniform = 0L;
+//    }
+//}
 
 PhongLightingEffect::~PhongLightingEffect()
 {
@@ -84,8 +85,11 @@ PhongLightingEffect::attach(osg::StateSet* stateset)
         shaders.load(vp, shaders.PhongLightingVertex);
         shaders.load(vp, shaders.PhongLightingFragment);
 
-        if ( _lightingUniform.valid() )
-            stateset->addUniform( _lightingUniform.get() );
+        stateset->setDefine(OE_LIGHTING_DEFINE, osg::StateAttribute::ON);
+        stateset->setDefine("OE_NUM_LIGHTS", "1");
+
+        //if ( _lightingUniform.valid() )
+        //    stateset->addUniform( _lightingUniform.get() );
     }
 }
 
@@ -99,7 +103,7 @@ PhongLightingEffect::detach()
             osg::ref_ptr<osg::StateSet> stateset;
             if ( (*it).lock(stateset) )
             {
-                detach( stateset );
+                detach(stateset.get());
                 (*it) = 0L;
             }
         }
@@ -113,8 +117,10 @@ PhongLightingEffect::detach(osg::StateSet* stateset)
 {
     if ( stateset && _supported )
     {
-        if ( _lightingUniform.valid() )
-            stateset->removeUniform( _lightingUniform.get() );
+        //if ( _lightingUniform.valid() )
+        //    stateset->removeUniform( _lightingUniform.get() );
+
+        stateset->removeDefine(OE_LIGHTING_DEFINE);
 
         VirtualProgram* vp = VirtualProgram::get( stateset );
         if ( vp )

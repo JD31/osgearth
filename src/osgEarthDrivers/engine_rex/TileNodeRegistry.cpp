@@ -18,6 +18,8 @@
 */
 #include "TileNodeRegistry"
 
+#include <osgEarth/Metrics>
+
 using namespace osgEarth::Drivers::RexTerrainEngine;
 using namespace osgEarth;
 
@@ -98,13 +100,17 @@ TileNodeRegistry::setDirty(const GeoExtent& extent,
 void
 TileNodeRegistry::addSafely(TileNode* tile)
 {
-    _tiles.insert( tile->getTileKey(), tile );
+    _tiles.insert( tile->getKey(), tile );
     //_tiles[ tile->getTileKey() ] = tile;
     if ( _revisioningEnabled )
         tile->setMapRevision( _maprev );
+    
+    // Start waiting on our neighbors
+    startListeningFor(tile->getKey().createNeighborKey(1, 0), tile);
+    startListeningFor(tile->getKey().createNeighborKey(0, 1), tile);
 
     // check for tiles that are waiting on this tile, and notify them!
-    TileKeyOneToMany::iterator notifier = _notifiers.find( tile->getTileKey() );
+    TileKeyOneToMany::iterator notifier = _notifiers.find( tile->getKey() );
     if ( notifier != _notifiers.end() )
     {
         TileKeySet& listeners = notifier->second;
@@ -120,26 +126,39 @@ TileNodeRegistry::addSafely(TileNode* tile)
         _notifiers.erase( notifier );
     }
 
-    OE_TEST << LC << _name 
+    OE_DEBUG << LC << _name 
         << ": tiles=" << _tiles.size()
         << ", notifiers=" << _notifiers.size()
         << std::endl;
+
+    Metrics::counter("RexStats", "Tiles", _tiles.size());
 }
 
 void
 TileNodeRegistry::removeSafely(const TileKey& key)
 {
-    _tiles.erase( key );
-
-    for(TileKeyOneToMany::iterator i = _notifiers.begin(); i != _notifiers.end(); )
+    TileNode* tile = _tiles.find(key);
+    if (tile)
     {
-        i->second.erase( key );
+        // remove neighbor listeners:
+        stopListeningFor(key.createNeighborKey(1, 0), tile);
+        stopListeningFor(key.createNeighborKey(0, 1), tile);
 
-        if ( i->second.size() == 0 )
-            _notifiers.erase( i++ ); // http://stackoverflow.com/a/8234813/4218920
-        else
-            ++i;
+        // remove the tile.
+        _tiles.erase( key );
+
+        Metrics::counter("RexStats", "Tiles", _tiles.size());
     }
+
+    //for(TileKeyOneToMany::iterator i = _notifiers.begin(); i != _notifiers.end(); )
+    //{
+    //    i->second.erase( key );
+
+    //    if ( i->second.size() == 0 )
+    //        _notifiers.erase( i++ ); // http://stackoverflow.com/a/8234813/4218920
+    //    else
+    //        ++i;
+    //}
 }
 
 void
@@ -173,7 +192,7 @@ TileNodeRegistry::remove( TileNode* tile )
     if ( tile )
     {
         Threading::ScopedWriteLock exclusive( _tilesMutex );
-        removeSafely( tile->getTileKey() );
+        removeSafely( tile->getKey() );
     }
 }
   
@@ -229,6 +248,7 @@ TileNodeRegistry::empty() const
     return _tiles.empty();
 }
 
+#if 0
 void
 TileNodeRegistry::listenFor(const TileKey& tileToWaitFor, TileNode* waiter)
 {
@@ -248,13 +268,55 @@ TileNodeRegistry::listenFor(const TileKey& tileToWaitFor, TileNode* waiter)
         _notifiers[tileToWaitFor].insert( waiter->getTileKey() );
     }
 }
+#endif
+
+void
+TileNodeRegistry::startListeningFor(const TileKey& tileToWaitFor, TileNode* waiter)
+{
+    //Threading::ScopedMutexLock lock( _tilesMutex );
+    // ASSUME EXCLUSIVE LOCK
+    TileNode* tile = _tiles.find( tileToWaitFor );
+    if ( tile )
+    {
+        OE_DEBUG << LC << waiter->getKey().str() << " listened for " << tileToWaitFor.str()
+            << ", but it was already in the repo.\n";
+
+        waiter->notifyOfArrival( tile );
+    }
+    else
+    {
+        OE_DEBUG << LC << waiter->getKey().str() << " listened for " << tileToWaitFor.str() << ".\n";
+        //_notifications[tileToWaitFor].push_back( waiter->getKey() );
+        _notifiers[tileToWaitFor].insert( waiter->getKey() );
+    }
+}
+
+void
+TileNodeRegistry::stopListeningFor(const TileKey& tileToWaitFor, TileNode* waiter)
+{
+    //Threading::ScopedMutexLock lock( _tilesMutex );
+    // ASSUME EXCLUSIVE LOCK
+
+    TileKeyOneToMany::iterator i = _notifiers.find(tileToWaitFor);
+    if (i != _notifiers.end())
+    {
+        // remove the waiter from this set:
+        i->second.erase(waiter->getKey());
+
+        // if the set is now empty, remove the set entirely
+        if (i->second.empty())
+        {
+            _notifiers.erase(i);
+        }
+    }
+}
         
 TileNode*
 TileNodeRegistry::takeAny()
 {
     Threading::ScopedWriteLock exclusive( _tilesMutex );
     osg::ref_ptr<TileNode> tile = _tiles.begin()->second.tile.get();
-    removeSafely( tile->getTileKey() );
+    removeSafely( tile->getKey() );
     return tile.release();
 }
 
@@ -272,6 +334,8 @@ TileNodeRegistry::releaseAll(ResourceReleaser* releaser)
 
         _tiles.clear();
         _notifiers.clear();
+
+        Metrics::counter("RexStats", "Tiles", _tiles.size());
     }
 
     releaser->push(objects);

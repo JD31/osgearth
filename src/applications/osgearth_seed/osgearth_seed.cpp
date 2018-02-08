@@ -31,10 +31,15 @@
 #include <osgEarth/CacheSeed>
 #include <osgEarth/MapNode>
 #include <osgEarth/Registry>
-#include <osgEarthDrivers/feature_ogr/OGRFeatureOptions>
+#include <osgEarth/FileUtils>
+#include <osgEarth/ImageLayer>
+#include <osgEarth/ElevationLayer>
+#include <osgEarth/TileVisitor>
 #include <osgEarth/FileUtils>
 
-#include <osgEarth/TileVisitor>
+#include <osgEarthFeatures/FeatureCursor>
+
+#include <osgEarthDrivers/feature_ogr/OGRFeatureOptions>
 
 #include <iostream>
 #include <sstream>
@@ -108,7 +113,7 @@ int message( const std::string& msg )
 }
 
 int
-    seed( osg::ArgumentParser& args )
+seed( osg::ArgumentParser& args )
 {    
     osgDB::Registry::instance()->getReaderWriterForExtension("png");
     osgDB::Registry::instance()->getReaderWriterForExtension("jpg");
@@ -289,7 +294,7 @@ int
     
     if (verbose)
     {
-        visitor->setProgressCallback( progress );
+        visitor->setProgressCallback( progress.get() );
     }
 
     if ( minLevel >= 0 )
@@ -315,12 +320,12 @@ int
     // They want to seed an image layer
     if (imageLayerIndex >= 0)
     {
-        osg::ref_ptr< ImageLayer > layer = map->getImageLayerAt( imageLayerIndex );
+        osg::ref_ptr< ImageLayer > layer = map->getLayerAt<ImageLayer>( imageLayerIndex );
         if (layer)
         {
             OE_NOTICE << "Seeding single layer " << layer->getName() << std::endl;
             osg::Timer_t start = osg::Timer::instance()->tick();        
-            seeder.run(layer, map);
+            seeder.run(layer.get(), map);
             osg::Timer_t end = osg::Timer::instance()->tick();
             if (verbose)
             {
@@ -337,12 +342,12 @@ int
     // They want to seed an elevation layer
     else if (elevationLayerIndex >= 0)
     {
-        osg::ref_ptr< ElevationLayer > layer = map->getElevationLayerAt( elevationLayerIndex );
+        osg::ref_ptr< ElevationLayer > layer = map->getLayerAt<ElevationLayer>( elevationLayerIndex );
         if (layer)
         {
             OE_NOTICE << "Seeding single layer " << layer->getName() << std::endl;
             osg::Timer_t start = osg::Timer::instance()->tick();        
-            seeder.run(layer, map);
+            seeder.run(layer.get(), map);
             osg::Timer_t end = osg::Timer::instance()->tick();
             if (verbose)
             {
@@ -357,11 +362,14 @@ int
     }
     // They want to seed the entire map
     else
-    {                
+    {
+        TerrainLayerVector terrainLayers;
+        map->getLayers(terrainLayers);
+
         // Seed all the map layers
-        for (unsigned int i = 0; i < map->getNumImageLayers(); ++i)
+        for (unsigned int i = 0; i < terrainLayers.size(); ++i)
         {            
-            osg::ref_ptr< ImageLayer > layer = map->getImageLayerAt(i);
+            osg::ref_ptr< TerrainLayer > layer = terrainLayers[i].get();
             OE_NOTICE << "Seeding layer" << layer->getName() << std::endl;            
             osg::Timer_t start = osg::Timer::instance()->tick();
             seeder.run(layer.get(), map);            
@@ -372,18 +380,18 @@ int
             }                
         }
 
-        for (unsigned int i = 0; i < map->getNumElevationLayers(); ++i)
-        {
-            osg::ref_ptr< ElevationLayer > layer = map->getElevationLayerAt(i);
-            OE_NOTICE << "Seeding layer" << layer->getName() << std::endl;
-            osg::Timer_t start = osg::Timer::instance()->tick();
-            seeder.run(layer.get(), map);            
-            osg::Timer_t end = osg::Timer::instance()->tick();
-            if (verbose)
-            {
-                OE_NOTICE << "Completed seeding layer " << layer->getName() << " in " << prettyPrintTime( osg::Timer::instance()->delta_s( start, end ) ) << std::endl;
-            }                
-        }        
+        //for (unsigned int i = 0; i < map->getNumElevationLayers(); ++i)
+        //{
+        //    osg::ref_ptr< ElevationLayer > layer = map->getElevationLayerAt(i);
+        //    OE_NOTICE << "Seeding layer" << layer->getName() << std::endl;
+        //    osg::Timer_t start = osg::Timer::instance()->tick();
+        //    seeder.run(layer.get(), map);            
+        //    osg::Timer_t end = osg::Timer::instance()->tick();
+        //    if (verbose)
+        //    {
+        //        OE_NOTICE << "Completed seeding layer " << layer->getName() << " in " << prettyPrintTime( osg::Timer::instance()->delta_s( start, end ) ) << std::endl;
+        //    }                
+        //}        
     }    
 
     return 0;
@@ -412,8 +420,9 @@ int list( osg::ArgumentParser& args )
     MapFrame mapf( mapNode->getMap() );
 
     TerrainLayerVector layers;
-    std::copy( mapf.imageLayers().begin(), mapf.imageLayers().end(), std::back_inserter(layers) );
-    std::copy( mapf.elevationLayers().begin(), mapf.elevationLayers().end(), std::back_inserter(layers) );
+    mapf.getLayers(layers);
+    //std::copy( mapf.imageLayers().begin(), mapf.imageLayers().end(), std::back_inserter(layers) );
+    //std::copy( mapf.elevationLayers().begin(), mapf.elevationLayers().end(), std::back_inserter(layers) );
 
     for( TerrainLayerVector::iterator i =layers.begin(); i != layers.end(); ++i )
     {
@@ -471,7 +480,7 @@ purge( osg::ArgumentParser& args )
 
 
     ImageLayerVector imageLayers;
-    map->getImageLayers( imageLayers );
+    map->getLayers( imageLayers );
     for( ImageLayerVector::const_iterator i = imageLayers.begin(); i != imageLayers.end(); ++i )
     {
         ImageLayer* layer = i->get();
@@ -498,7 +507,7 @@ purge( osg::ArgumentParser& args )
     }
 
     ElevationLayerVector elevationLayers;
-    map->getElevationLayers( elevationLayers );
+    map->getLayers( elevationLayers );
     for( ElevationLayerVector::const_iterator i = elevationLayers.begin(); i != elevationLayers.end(); ++i )
     {
         ElevationLayer* layer = i->get();

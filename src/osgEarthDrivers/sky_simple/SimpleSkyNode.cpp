@@ -183,8 +183,8 @@ namespace
 
             int i_plus_1 = i < segments-1? i+1 : 0;
             el->push_back( 0 );
-            el->push_back( 1 + i_plus_1 );
             el->push_back( 1 + i );
+            el->push_back( 1 + i_plus_1 );
         }
 
         return geom;
@@ -261,8 +261,10 @@ SimpleSkyNode::initialize(const SpatialReference* srs)
         stateset->addUniform( _lightPosUniform.get() );
 
         // default GL_LIGHTING uniform setting
-        stateset->addUniform(
-            Registry::shaderFactory()->createUniformForGLMode(GL_LIGHTING, 1) );
+        //stateset->addUniform(
+        //    Registry::shaderFactory()->createUniformForGLMode(GL_LIGHTING, 1) );
+
+        stateset->setDefine(OE_LIGHTING_DEFINE, osg::StateAttribute::ON);
 
         // make the uniforms and the terrain lighting shaders.
         makeSceneLighting();
@@ -452,7 +454,7 @@ SimpleSkyNode::makeSceneLighting()
     else
     {
         _phong = new PhongLightingEffect();
-        _phong->setCreateLightingUniform( false );
+        //_phong->setCreateLightingUniform( false );
         _phong->attach( stateset );
         OE_INFO << LC << "Using Phong lighting\n";
     }
@@ -563,11 +565,7 @@ SimpleSkyNode::makeSun()
     osg::StateSet* set = sun->getOrCreateStateSet();
     set->setMode( GL_BLEND, 1 );
 
-    set->getOrCreateUniform( "atmos_sunAlpha", osg::Uniform::FLOAT )->set( 1.0f );
-
     // configure the stateset
-    set->setMode( GL_LIGHTING, osg::StateAttribute::OFF );
-    set->setMode( GL_CULL_FACE, osg::StateAttribute::OFF );
     set->setAttributeAndModes( new osg::Depth(osg::Depth::ALWAYS, 0, 1, false), osg::StateAttribute::ON );
 
     // create shaders
@@ -584,7 +582,7 @@ SimpleSkyNode::makeSun()
         ShaderLoader::load(pkg.Sun_Frag, pkg) );
     program->addShader( fs );
 
-    set->setAttributeAndModes( program, osg::StateAttribute::ON );
+    set->setAttributeAndModes( program, osg::StateAttribute::ON | osg::StateAttribute::PROTECTED );
 
     // A nested camera isolates the projection matrix calculations so the node won't 
     // affect the clip planes in the rest of the scene.
@@ -617,7 +615,7 @@ SimpleSkyNode::makeMoon()
     osg::Geometry* geom = s_makeEllipsoidGeometry( em.get(), em->getRadiusEquator(), true );    
     //TODO:  Embed this texture in code or provide a way to have a default resource directory for osgEarth.
     //       Right now just need to have this file somewhere in your OSG_FILE_PATH
-    osg::Image* image = osgDB::readImageFile( "moon_1024x512.jpg" );
+    osg::ref_ptr<osg::Image> image = osgDB::readRefImageFile( "moon_1024x512.jpg" );
     osg::Texture2D * texture = new osg::Texture2D( image );
     texture->setFilter(osg::Texture::MIN_FILTER,osg::Texture::LINEAR);
     texture->setFilter(osg::Texture::MAG_FILTER,osg::Texture::LINEAR);
@@ -638,7 +636,7 @@ SimpleSkyNode::makeMoon()
     set->setAttributeAndModes( new osg::Depth(osg::Depth::ALWAYS, 0, 1, false), osg::StateAttribute::ON );
     set->setAttributeAndModes( new osg::BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA), osg::StateAttribute::ON );
     
-#ifdef OSG_GLES2_AVAILABLE
+#if 1 //defined(OSG_GLES2_AVAILABLE) || defined(OSG_GLES3_AVAILABLE)
 
     set->addUniform(new osg::Uniform("moonTex", 0));
 
@@ -772,7 +770,10 @@ SimpleSkyNode::buildStarGeometry(const std::vector<StarData>& stars)
 
     osg::StateSet* sset = geometry->getOrCreateStateSet();
 
+#if !defined(OSG_GL3_AVAILABLE)
+    // In GL3, PointSprite is no longer available, and is always on.
     sset->setTextureAttributeAndModes( 0, new osg::PointSprite(), osg::StateAttribute::ON );
+#endif
     sset->setMode( GL_VERTEX_PROGRAM_POINT_SIZE, osg::StateAttribute::ON );
 
     Shaders pkg;

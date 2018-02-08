@@ -5,24 +5,19 @@ $GLSL_DEFAULT_PRECISION_FLOAT
 #pragma vp_location   fragment_lighting
 #pragma vp_order      0.8
 
-uniform bool oe_mode_GL_LIGHTING; 
+#pragma import_defines(OE_LIGHTING, OE_NUM_LIGHTS)
+
 uniform float oe_sky_exposure;           // HDR scene exposure (ground level)
 uniform float oe_sky_ambientBoostFactor; // ambient sunlight booster for daytime
 
-varying vec3 atmos_lightDir;    // light direction (view coords)
-varying vec3 atmos_color;       // atmospheric lighting color
-varying vec3 atmos_atten;       // atmospheric lighting attentuation factor
-varying vec3 atmos_up;          // earth up vector at fragment (in view coords)
-varying float atmos_space;      // camera altitude (0=ground, 1=atmos outer radius)
-varying vec3 atmos_vert; 
+in vec3 atmos_lightDir;    // light direction (view coords)
+in vec3 atmos_color;       // atmospheric lighting color
+in vec3 atmos_atten;       // atmospheric lighting attenuation factor
+in vec3 atmos_up;          // earth up vector at fragment (in view coords)
+in float atmos_space;      // camera altitude (0=ground, 1=atmos outer radius)
+in vec3 atmos_vert; 
         
 vec3 vp_Normal;          // surface normal (from osgEarth)
-
-
-#define MAX_LIGHTS 8
-
-// Total number of lights in the scene
-uniform int osg_NumLights;
 
 // Parameters of each light:
 struct osg_LightSourceParameters 
@@ -41,7 +36,7 @@ struct osg_LightSourceParameters
 
    bool enabled;
 };  
-uniform osg_LightSourceParameters osg_LightSource[MAX_LIGHTS];
+uniform osg_LightSourceParameters osg_LightSource[OE_NUM_LIGHTS];
 
 // Surface material:
 struct osg_MaterialParameters  
@@ -55,11 +50,11 @@ struct osg_MaterialParameters
 uniform osg_MaterialParameters osg_FrontMaterial; 
 
 
-
 void atmos_fragment_main(inout vec4 color) 
 { 
-    if ( oe_mode_GL_LIGHTING == false )
-        return; 
+#ifndef OE_LIGHTING
+    return;
+#endif
 
     // See:
     // https://en.wikipedia.org/wiki/Phong_reflection_model
@@ -78,7 +73,7 @@ void atmos_fragment_main(inout vec4 color)
         osg_FrontMaterial.emission.rgb;
         // + osg_FrontMaterial.ambient.rgb * osg_LightModel.ambient.rgb;
 
-    int numLights = min(osg_NumLights, MAX_LIGHTS);
+    int numLights = OE_NUM_LIGHTS;
 
     for (int i=0; i<numLights; ++i)
     {
@@ -103,14 +98,14 @@ void atmos_fragment_main(inout vec4 color)
                 vec4 VL4 = osg_LightSource[i].position - V;
                 L = normalize(VL4.xyz);
 
-                // calculate attentuation:
+                // calculate attenuation:
                 float distance = length(VL4);
                 attenuation = 1.0 / (
                     osg_LightSource[i].constantAttenuation +
                     osg_LightSource[i].linearAttenuation * distance +
                     osg_LightSource[i].quadraticAttenuation * distance * distance);
 
-                // for a spot light, the attentuation help form the cone:
+                // for a spot light, the attenuation help form the cone:
                 if (osg_LightSource[i].spotCutoff <= 90.0)
                 {
                     vec3 D = normalize(osg_LightSource[i].spotDirection);

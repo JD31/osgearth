@@ -126,7 +126,7 @@ createFramebufferPass(App& app)
     osg::StateSet* stateset = quad->getOrCreateStateSet();
 
     static const char* vertSource =
-        "varying vec4 texcoord;\n"
+        "out vec4 texcoord;\n"
         "void effect_vert(inout vec4 vertexView)\n"
         "{\n"
         "    texcoord = gl_MultiTexCoord0; \n"
@@ -139,7 +139,8 @@ createFramebufferPass(App& app)
         "uniform sampler2DRect gcolor;\n"
         "uniform sampler2DRect gnormal;\n"
         "uniform sampler2DRect gdepth;\n"
-        "varying vec4 texcoord;\n"
+        "uniform float osg_FrameTime;\n"
+        "in vec4 texcoord;\n"
 
         "void effect_frag(inout vec4 color)\n"
         "{\n"
@@ -148,7 +149,7 @@ createFramebufferPass(App& app)
         "    vec3 normal = texture(gnormal,texcoord.st).xyz *2.0-1.0; \n"
 
         // sample radius in pixels:
-        "    float e = 2.0; \n"
+        "    float e = 25.0 * sin(osg_FrameTime); \n"
 
         // sample the normals around our pixel and find the approximate
         // deviation from our center normal:

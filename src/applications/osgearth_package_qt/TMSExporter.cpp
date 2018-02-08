@@ -30,6 +30,7 @@
 #include <osgEarth/Common>
 #include <osgEarth/Map>
 #include <osgEarth/MapNode>
+#include <osgEarth/ImageLayer>
 #include <osgEarth/Registry>
 #include <osgEarth/StringUtils>
 #include <osgEarth/FileUtils>
@@ -156,19 +157,25 @@ int TMSExporter::exportTMS(MapNode* mapNode, const std::string& earthFilePath, c
     packager.getTileVisitor()->setMaxLevel(_maxLevel);
 
     // Compute the total number of layers we are going to operate on.
-    unsigned int totalLayers = map->getNumImageLayers() + map->getNumElevationLayers();  
+    ImageLayerVector imageLayers;
+    map->getLayers(imageLayers);
+
+    ElevationLayerVector elevationLayers;
+    map->getLayers(elevationLayers);
+
+    unsigned int totalLayers = imageLayers.size() + elevationLayers.size();
 
     unsigned int layerNum = 1;
 
     // Package each image layer
-    for (unsigned int i = 0; i < map->getNumImageLayers(); i++)
+    for (unsigned int i = 0; i < imageLayers.size(); i++)
     {            
         // Don't continue if the export has been canceled
         if (_progress->isCanceled())
         {
             break;
         }
-        osg::ref_ptr< ImageLayer > layer = map->getImageLayerAt(i);      
+        osg::ref_ptr< ImageLayer > layer = imageLayers[i].get();
         std::stringstream buf;
         buf << "Packaging " << layer->getName() << " (" << layerNum << " of " << totalLayers << ")";
         OE_NOTICE << buf.str() << std::endl;
@@ -186,16 +193,16 @@ int TMSExporter::exportTMS(MapNode* mapNode, const std::string& earthFilePath, c
                 outEarthFile );
 
             ImageLayerOptions layerOptions( packager.getLayerName(), tms );
-            layerOptions.mergeConfig( layer->getInitialOptions().getConfig( true ) );
+            layerOptions.mergeConfig( layer->options().getConfig() );
             layerOptions.cachePolicy() = CachePolicy::NO_CACHE;
 
-            outMap->addImageLayer( new ImageLayer( layerOptions ) );
+            outMap->addLayer( new ImageLayer( layerOptions ) );
         }
         layerNum++;
     }
 
     // Package each elevation layer
-    for (unsigned int i = 0; i < map->getNumElevationLayers(); i++)
+    for (unsigned int i = 0; i < elevationLayers.size(); i++)
     {
         // Don't continue if the export has been canceled
         if (_progress->isCanceled())
@@ -203,7 +210,7 @@ int TMSExporter::exportTMS(MapNode* mapNode, const std::string& earthFilePath, c
             break;
         }
 
-        osg::ref_ptr< ElevationLayer > layer = map->getElevationLayerAt(i);      
+        osg::ref_ptr< ElevationLayer > layer = elevationLayers[i].get();
         std::stringstream buf;
         buf << "Packaging " << layer->getName() << " (" << layerNum << " of " << totalLayers << ")";
         OE_NOTICE << buf.str() << std::endl;
@@ -222,10 +229,10 @@ int TMSExporter::exportTMS(MapNode* mapNode, const std::string& earthFilePath, c
                 outEarthFile );
 
             ElevationLayerOptions layerOptions( packager.getLayerName(), tms );
-            layerOptions.mergeConfig( layer->getInitialOptions().getConfig( true ) );
+            layerOptions.mergeConfig( layer->options().getConfig() );
             layerOptions.cachePolicy() = CachePolicy::NO_CACHE;
 
-            outMap->addElevationLayer( new ElevationLayer( layerOptions ) );
+            outMap->addLayer( new ElevationLayer( layerOptions ) );
         }
 
         layerNum++;

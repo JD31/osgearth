@@ -22,7 +22,6 @@
 #include <osgEarthUtil/Common>
 #include <osgEarth/Common>
 #include <osgEarth/Units>
-#include <osgEarth/AlphaEffect>
 #include <osgEarth/Containers>
 #include <osg/Drawable>
 #include <osg/Geode>
@@ -41,7 +40,7 @@
  * Controls are 2D interface components that automatically layout to fit their containers.
  * The support layout containers, margins and padding, alignment/justification, and docking.
  * Controls are a quick and easy way to add "HUD" components to a scene. Just create a
- * ControlSurface and add it to a View's scene. Then create and add Controls to that
+ * ControlCanvas and add it to a View's scene. Then create and add Controls to that
  * surface.
  */
 namespace osgEarth { namespace Util { namespace Controls
@@ -55,7 +54,7 @@ namespace osgEarth { namespace Util { namespace Controls
     // internal state class
     struct ControlContext
     {
-        ControlContext() : _viewContextID(~0), _frameStamp(0L), _view(0L) { }
+        ControlContext() : _view(0L), _viewContextID(~0), _frameStamp(0L) { }
         osg::View* _view;
         osg::ref_ptr<const osg::Viewport> _vp;
         unsigned int _viewContextID;
@@ -266,8 +265,8 @@ namespace osgEarth { namespace Util { namespace Controls
         bool getAbsorbEvents() const { return _absorbEvents; }
 
         /** control opacity [0..1] */
-        void setOpacity(float value) { if ( _alphaEffect.valid() ) _alphaEffect->setAlpha(value); }
-        float getOpacity() const { return _alphaEffect.valid() ? _alphaEffect->getAlpha() : 1.0f; }
+        void setOpacity(float value);
+        float getOpacity() const { return _foreColor->a(); }
 
         void addEventHandler( ControlEventHandler* handler, bool fire =false );
 
@@ -327,7 +326,6 @@ namespace osgEarth { namespace Util { namespace Controls
         bool _absorbEvents;
         osg::Geode* _geode;
         osg::ref_ptr<osg::Geometry> _geom;
-        osg::ref_ptr<AlphaEffect> _alphaEffect;
     };
 
     typedef std::vector< osg::ref_ptr<Control> > ControlVector;

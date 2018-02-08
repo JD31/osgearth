@@ -300,7 +300,9 @@ namespace
             }
             return HTTPClient::readObject(req, opt, p);
         }
-        ReadResult fromFile( const std::string& uri, const osgDB::Options* opt ) { return ReadResult(osgDB::readObjectFile(uri, opt)); }
+        ReadResult fromFile( const std::string& uri, const osgDB::Options* opt ) {
+            return ReadResult(osgDB::readRefObjectFile(uri, opt).get());
+        }
     };
 
     struct ReadNode
@@ -317,7 +319,9 @@ namespace
             }
             return HTTPClient::readNode(req, opt, p);
         }
-        ReadResult fromFile( const std::string& uri, const osgDB::Options* opt ) { return ReadResult(osgDB::readNodeFile(uri, opt)); }
+        ReadResult fromFile( const std::string& uri, const osgDB::Options* opt ) {
+            return ReadResult(osgDB::readRefNodeFile(uri, opt));
+        }
     };
 
     struct ReadImage
@@ -346,7 +350,7 @@ namespace
             return r;
         }
         ReadResult fromFile( const std::string& uri, const osgDB::Options* opt ) { 
-            ReadResult r = ReadResult(osgDB::readImageFile(uri, opt));
+            ReadResult r = ReadResult(osgDB::readRefImageFile(uri, opt));
             if ( r.getImage() ) r.getImage()->setFileName( uri );
             return r;
         }
@@ -445,7 +449,7 @@ namespace
                     if ( !gotResultFromCallback )
                     {
                         // no callback, just read from a local file.
-                        result = reader.fromFile( uri.full(), localOptions );
+                        result = reader.fromFile( uri.full(), localOptions.get() );
                     }
                 }
 
@@ -471,7 +475,7 @@ namespace
                     // first try to go to the cache if there is one:
                     if ( bin && cp->isCacheReadable() )
                     {                                                
-                        result = reader.fromCache( bin, uri.cacheKey() );                        
+                        result = reader.fromCache( bin.get(), uri.cacheKey() );                        
                         if ( result.succeeded() )
                         {                                        
                             expired = cp->isExpired(result.lastModifiedTime());
@@ -484,7 +488,7 @@ namespace
                     {                        
                         // Need to do this to support nested PLODs and Proxynodes.
                         osg::ref_ptr<osgDB::Options> remoteOptions =
-                            Registry::instance()->cloneOrCreateOptions( localOptions );
+                            Registry::instance()->cloneOrCreateOptions( localOptions.get() );
                         remoteOptions->getDatabasePathList().push_front( osgDB::getFilePath(uri.full()) );
 
                         // Store the existing object from the cache if there is one.
@@ -526,17 +530,10 @@ namespace
                             if ( result.succeeded() && !result.isFromCache() && bin && cp->isCacheWriteable() && bin )
                             {
                                 OE_DEBUG << LC << "Writing " << uri.cacheKey() << " to cache" << std::endl;
-                                bin->write( uri.cacheKey(), result.getObject(), result.metadata(), remoteOptions );
+                                bin->write( uri.cacheKey(), result.getObject(), result.metadata(), remoteOptions.get() );
                             }
                         }
                     }
-
-                    OE_TEST << LC 
-                        << uri.base() << ": " 
-                        << (result.succeeded() ? "OK" : "FAILED") 
-                        << "; policy=" << cp->usageString()
-                        << (result.isFromCache() && result.succeeded() ? "; (from cache)" : "")
-                        << std::endl;
                 }
 
 
@@ -550,6 +547,13 @@ namespace
                     }
                 }
             }
+
+            OE_TEST << LC
+                << uri.base() << ": "
+                << (result.succeeded() ? "OK" : "FAILED")
+                //<< "; policy=" << cp->usageString()
+                << (result.isFromCache() && result.succeeded() ? "; (from cache)" : "")
+                << std::endl;
         }
 
         // post-process if there's a post-URI callback.

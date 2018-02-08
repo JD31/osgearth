@@ -23,8 +23,11 @@
 #include <osgEarthQt/DataManager>
 #include <osgEarthQt/GuiActions>
 
-
 #include <osgEarth/Map>
+#include <osgEarth/ImageLayer>
+#include <osgEarth/ElevationLayer>
+#include <osgEarth/ModelLayer>
+#include <osgEarth/MaskLayer>
 #include <osgEarth/Viewpoint>
 #include <osgEarthAnnotation/AnnotationNode>
 
@@ -428,7 +431,7 @@ void MapCatalogWidget::refreshElevationLayers()
     _elevationsItem->takeChildren();
 	  
     osgEarth::ElevationLayerVector layers;
-    _map->getElevationLayers(layers);
+    _map->getLayers(layers);
     for (osgEarth::ElevationLayerVector::const_iterator it = layers.begin(); it != layers.end(); ++it)
     {
       LayerTreeItem* layerItem = new LayerTreeItem(*it, _map);
@@ -462,7 +465,7 @@ void MapCatalogWidget::refreshImageLayers()
     _imagesItem->takeChildren();
 
     osgEarth::ImageLayerVector layers;
-    _map->getImageLayers(layers);
+    _map->getLayers(layers);
     for (osgEarth::ImageLayerVector::const_iterator it = layers.begin(); it != layers.end(); ++it)
     {
       LayerTreeItem* layerItem = new LayerTreeItem(*it, _map);
@@ -496,7 +499,8 @@ void MapCatalogWidget::refreshModelLayers()
     _modelsItem->takeChildren();
 
     osgEarth::ModelLayerVector layers;
-    _map->getModelLayers(layers);
+    _map->getLayers(layers);
+
     for (osgEarth::ModelLayerVector::const_iterator it = layers.begin(); it != layers.end(); ++it)
     {
       LayerTreeItem* layerItem = new LayerTreeItem(*it, _map);
@@ -567,7 +571,8 @@ void MapCatalogWidget::refreshMaskLayers()
     _masksItem->takeChildren();
 
     osgEarth::MaskLayerVector layers;
-    _map->getTerrainMaskLayers(layers);
+    _map->getLayers(layers);
+
     for (osgEarth::MaskLayerVector::const_iterator it = layers.begin(); it != layers.end(); ++it)
     {
       CustomActionTreeItem* layerItem = new CustomActionTreeItem(*it);

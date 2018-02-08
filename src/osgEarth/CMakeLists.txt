@@ -4,9 +4,18 @@ ELSE (DYNAMIC_OSGEARTH)
     ADD_DEFINITIONS(-DOSGEARTH_LIBRARY_STATIC)
 ENDIF(DYNAMIC_OSGEARTH)
 
+# CURL options
 OPTION(CURL_IS_STATIC "on if curl is a static lib " ON)
 MARK_AS_ADVANCED(CURL_IS_STATIC)
 
+# NVTT mipmap generation 
+option(OSGEARTH_ENABLE_NVTT_CPU_MIPMAPS "Use NVTT, if available, to generate texture mipmaps on the CPU" OFF)
+mark_as_advanced(OSGEARTH_ENABLE_NVTT_CPU_MIPMAPS)
+if(OSGEARTH_ENABLE_NVTT_CPU_MIPMAPS)
+    add_definitions(-DOSGEARTH_ENABLE_NVTT_CPU_MIPMAPS)
+endif(OSGEARTH_ENABLE_NVTT_CPU_MIPMAPS)
+
+# TinyXML options
 ADD_DEFINITIONS(-DTIXML_USE_STL)
 
 # Builds the HTTPClient with WIN_INET instead of CURL
@@ -29,7 +38,6 @@ ENDIF(WIN32)
 SET(LIB_NAME osgEarth)
 
 set(TARGET_GLSL
-    AlphaEffect.frag.glsl
     DepthOffset.vert.glsl
     Draping.vert.glsl
     Draping.frag.glsl
@@ -53,8 +61,6 @@ configure_shaders(
 SET(HEADER_PATH ${OSGEARTH_SOURCE_DIR}/include/${LIB_NAME})
 
 SET(LIB_PUBLIC_HEADERS
-    AlphaEffect
-    AutoScale
     Bounds
     Cache
     CacheEstimator
@@ -75,7 +81,6 @@ SET(LIB_PUBLIC_HEADERS
     DateTime
     DateTimeRange
     DepthOffset
-    DPLineSegmentIntersector
     DrapeableNode
     DrapingCullSet
     DrapingTechnique
@@ -85,6 +90,7 @@ SET(LIB_PUBLIC_HEADERS
     ElevationLOD
     ElevationPool
     ElevationQuery
+    Endian
     Export
     Extension
     FadeEffect
@@ -103,9 +109,13 @@ SET(LIB_PUBLIC_HEADERS
     ImageMosaic
     ImageToHeightFieldConverter
     ImageUtils
+    IntersectionPicker
     IOTypes
     JsonUtils
+    LandCover
+    LandCoverLayer
     Layer
+    LayerListener
     Lighting
     LineFunctor
     Locators
@@ -124,6 +134,8 @@ SET(LIB_PUBLIC_HEADERS
     MaskSource
     Memory
     MemCache
+    MetaTile
+    Metrics
     ModelLayer
     ModelSource
     NativeProgramAdapter
@@ -132,19 +144,20 @@ SET(LIB_PUBLIC_HEADERS
     optional
     ObjectIndex
     OverlayDecorator
-    OverlayNode
+    PagedNode
+    PatchLayer
     PhongLightingEffect
     Picker
-    IntersectionPicker
+    PluginLoader
     PrimitiveIntersector
     Profile
     Profiler
     Progress
-    QuadTree
     Random
     Registry
     ResourceReleaser
     Revisioning
+    SceneGraphCallback
     ScreenSpaceLayout
     Shaders
     ShaderFactory
@@ -153,6 +166,7 @@ SET(LIB_PUBLIC_HEADERS
     ShaderUtils
     Shadowing
     SharedSARepo
+    SimplexNoise
     SpatialReference
     StateSetCache
     StateSetLOD
@@ -165,15 +179,15 @@ SET(LIB_PUBLIC_HEADERS
     TerrainOptions
     TerrainEngineNode
     TerrainEngineRequirements
+    TerrainResources
     TerrainTileModel
     TerrainTileModelFactory
     TerrainTileNode
     TileKeyDataStore
-    TilePatchCallback
     Tessellator
-    TextureCompositor
     TileKey
     TileHandler
+    TileRasterizer
     TileSource
     TileVisitor
     TimeControl
@@ -184,8 +198,11 @@ SET(LIB_PUBLIC_HEADERS
     Utils
     Version
     VerticalDatum
+    VideoLayer
     Viewpoint
     VirtualProgram
+    VisibleLayer
+    WrapperLayer
     XmlUtils
 )
 
@@ -194,7 +211,7 @@ IF (NOT TINYXML_FOUND)
     SET(LIB_PUBLIC_HEADERS
         ${LIB_PUBLIC_HEADERS}
         tinystr.h
-        tinyxml.h 
+        tinyxml.h
     )
 ENDIF (NOT TINYXML_FOUND)
 
@@ -211,19 +228,17 @@ ENDIF (NOT TINYXML_FOUND)
 SET(VERSION_GIT_SOURCE "")
 IF (OSGEARTH_EMBED_GIT_SHA)
 	ADD_DEFINITIONS(-DOSGEARTH_EMBED_GIT_SHA)
-	
+
 	# auto-generate the VersionGit file to include the git SHA1 variable.
 	configure_file(
 		"${CMAKE_CURRENT_SOURCE_DIR}/VersionGit.cpp.in"
-		"${CMAKE_CURRENT_BINARY_DIR}/VersionGit.cpp" 
+		"${CMAKE_CURRENT_BINARY_DIR}/VersionGit.cpp"
 		@ONLY)
-    
-	set(VERSION_GIT_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/VersionGit.cpp")	
+
+	set(VERSION_GIT_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/VersionGit.cpp")
 ENDIF (OSGEARTH_EMBED_GIT_SHA)
 
 set(TARGET_SRC
-    AlphaEffect.cpp
-    AutoScale.cpp
     Bounds.cpp
     Cache.cpp
     CacheBin.cpp
@@ -242,7 +257,6 @@ set(TARGET_SRC
     DateTime.cpp
     DateTimeRange.cpp
     DepthOffset.cpp
-    DPLineSegmentIntersector.cpp
     DrapeableNode.cpp
     DrapingCullSet.cpp
     DrapingTechnique.cpp
@@ -268,8 +282,11 @@ set(TARGET_SRC
     ImageMosaic.cpp
     ImageToHeightFieldConverter.cpp
     ImageUtils.cpp
+    IntersectionPicker.cpp
     IOTypes.cpp
     JsonUtils.cpp
+    LandCover.cpp
+    LandCoverLayer.cpp
     Layer.cpp
     Lighting.cpp
     Locators.cpp
@@ -286,6 +303,8 @@ set(TARGET_SRC
     MaskSource.cpp
     MemCache.cpp
     Memory.cpp
+    MetaTile.cpp
+    Metrics.cpp
     MimeTypes.cpp
     ModelLayer.cpp
     ModelSource.cpp
@@ -293,24 +312,25 @@ set(TARGET_SRC
     Notify.cpp
     ObjectIndex.cpp
     OverlayDecorator.cpp
-    OverlayNode.cpp
+    PagedNode.cpp
+    PatchLayer.cpp
     PhongLightingEffect.cpp
-    IntersectionPicker.cpp
     PrimitiveIntersector.cpp
     Profile.cpp
     Profiler.cpp
     Progress.cpp
-    QuadTree.cpp
     Random.cpp
     Registry.cpp
     ResourceReleaser.cpp
     Revisioning.cpp
+    SceneGraphCallback.cpp
     ScreenSpaceLayout.cpp
     ShaderFactory.cpp
     ShaderGenerator.cpp
     ShaderLoader.cpp
     ShaderUtils.cpp
     Shadowing.cpp
+    SimplexNoise.cpp
     SpatialReference.cpp
     StateSetCache.cpp
     StateSetLOD.cpp
@@ -321,14 +341,14 @@ set(TARGET_SRC
     TerrainLayer.cpp
     TerrainOptions.cpp
     TerrainEngineNode.cpp
+    TerrainResources.cpp
     TerrainTileModel.cpp
     TerrainTileModelFactory.cpp
     Tessellator.cpp
     TextureBufferSerializer.cpp
-    TextureCompositor.cpp
     TileKey.cpp
     TileHandler.cpp
-    TilePatchCallback.cpp
+    TileRasterizer.cpp
     TileVisitor.cpp
     TileSource.cpp
     TimeControl.cpp
@@ -339,8 +359,10 @@ set(TARGET_SRC
     Utils.cpp
     Version.cpp
     VerticalDatum.cpp
+    VideoLayer.cpp
     Viewpoint.cpp
     VirtualProgram.cpp
+    VisibleLayer.cpp
     XmlUtils.cpp
     ${SHADERS_CPP} )
 

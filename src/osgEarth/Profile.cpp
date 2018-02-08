@@ -23,6 +23,7 @@
 #include <osgEarth/Cube>
 #include <osgEarth/SpatialReference>
 #include <osgEarth/StringUtils>
+#include <osgEarth/Bounds>
 #include <osgDB/FileNameUtils>
 #include <algorithm>
 #include <sstream>
@@ -53,6 +54,12 @@ _numTilesWideAtLod0( 1 ),
 _numTilesHighAtLod0( 1 )
 {
     _namedProfile = namedProfile; // don't set above
+}
+
+ void
+ ProfileOptions::mergeConfig( const Config& conf ) {
+    ConfigOptions::mergeConfig( conf );
+    fromConfig( conf );
 }
 
 void
@@ -89,8 +96,8 @@ ProfileOptions::getConfig() const
     }
     else
     {
-        conf.updateIfSet( "srs", _srsInitString );
-        conf.updateIfSet( "vdatum", _vsrsInitString );
+        conf.set( "srs", _srsInitString );
+        conf.set( "vdatum", _vsrsInitString );
 
         if ( _bounds.isSet() )
         {
@@ -100,8 +107,8 @@ ProfileOptions::getConfig() const
             conf.update( "ymax", toString(_bounds->yMax()) );
         }
 
-        conf.updateIfSet( "num_tiles_wide_at_lod_0", _numTilesWideAtLod0 );
-        conf.updateIfSet( "num_tiles_high_at_lod_0", _numTilesHighAtLod0 );
+        conf.set( "num_tiles_wide_at_lod_0", _numTilesWideAtLod0 );
+        conf.set( "num_tiles_high_at_lod_0", _numTilesHighAtLod0 );
     }
     return conf;
 }
@@ -210,7 +217,30 @@ Profile::create(const std::string& srsInitString,
     }
     else if ( srs.valid() )
     {
-        OE_WARN << LC << "Failed to create profile; you must provide extents with a projected SRS." << std::endl;
+        OE_INFO << LC << "No extents given, making some up.\n";
+        Bounds bounds;
+        if (srs->guessBounds(bounds))
+        {
+            if (numTilesWideAtLod0 == 0 || numTilesHighAtLod0 == 0)
+            {
+                double ar = (bounds.width() / bounds.height());
+                if (ar >= 1.0) {
+                    int ari = (int)ar;
+                    numTilesHighAtLod0 = 1;
+                    numTilesWideAtLod0 = ari;
+                }
+                else {
+                    int ari = (int)(1.0/ar);
+                    numTilesWideAtLod0 = 1;
+                    numTilesHighAtLod0 = ari;
+                }
+            }            
+            return Profile::create(srs.get(), bounds.xMin(), bounds.yMin(), bounds.xMax(), bounds.yMax(), numTilesWideAtLod0, numTilesHighAtLod0);
+        }
+        else
+        {
+            OE_WARN << LC << "Failed to create profile; you must provide extents with a projected SRS." << std::endl;
+        }
     }
     else
     {

@@ -5,7 +5,9 @@ $GLSL_DEFAULT_PRECISION_FLOAT
 #pragma vp_location   vertex_view
 #pragma vp_order      0.5
 
-uniform bool oe_mode_GL_LIGHTING; 
+#pragma import_defines(OE_LIGHTING, OE_NUM_LIGHTS)
+
+//uniform bool oe_mode_GL_LIGHTING; 
 
 uniform mat4 osg_ViewMatrixInverse;   // world camera position in [3].xyz 
 uniform mat4 osg_ViewMatrix;          // GL view matrix 
@@ -40,7 +42,7 @@ vec3 vp_Normal;             // surface normal (from osgEarth)
 
 
 // Toatl number of lights in the scene
-uniform int osg_NumLights;
+//uniform int osg_NumLights;
 
 // Parameters of each light:
 struct osg_LightSourceParameters 
@@ -62,7 +64,7 @@ struct osg_LightSourceParameters
 
    bool enabled;
 };  
-uniform osg_LightSourceParameters osg_LightSource[8];
+uniform osg_LightSourceParameters osg_LightSource[1];
 
 
 
@@ -173,7 +175,11 @@ void atmos_GroundFromAtmosphere(in vec4 vertexVIEW)
 } 
 
 void atmos_vertex_main(inout vec4 vertexVIEW) 
-{ 
+{
+#ifndef OE_LIGHTING
+    return;
+#endif
+
     //if ( oe_mode_GL_LIGHTING == false ) return; 
 
     atmos_fCameraHeight = length(osg_ViewMatrixInverse[3].xyz); 

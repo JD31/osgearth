@@ -81,6 +81,28 @@ namespace osgEarth { namespace Features
         optional<float>& maxPolygonTilingAngle() { return _maxPolyTilingAngle_deg; }
         const optional<float>& maxPolygonTilingAngle() const { return _maxPolyTilingAngle_deg; }
 
+        /**
+         * Whether to run vertex order optimizations on the resulting geometry.
+         * This can speed up draw performance at the expense of increasing build time.
+         */
+        optional<bool>& optimizeVertexOrdering() { return _optimizeVertexOrdering; }
+        const optional<bool>& optimizeVertexOrdering() const { return _optimizeVertexOrdering; }
+
+        /**
+         * Maximum angle at which the smoother (for 3D polygon normal generation) should
+         * smooth normals across polygon boundaries. Default is 0 degrees. This corresponds
+         * to the SmoothingVisitor::setCreaseAngle value.
+         */
+        optional<Angle>& maxCreaseAngle() { return _maximumCreaseAngle; }
+        const optional<Angle>& maxCreaseAngle() const { return _maximumCreaseAngle; }
+
+        /**
+         * Whether to use GPU-generated geometry for lines with pixel width, as a replacement
+         * for the deprecated glLineWidth arttribute
+         */
+        optional<bool>& useGPULines() { return _useGPULines; }
+        const optional<bool>& useGPULines() const { return _useGPULines; }
+
     protected:
         Style                      _style;
 
@@ -88,6 +110,9 @@ namespace osgEarth { namespace Features
         optional<GeoInterpolation> _geoInterp;
         optional<StringExpression> _featureNameExpr;
         optional<float>            _maxPolyTilingAngle_deg;
+        optional<bool>             _optimizeVertexOrdering;
+        optional<Angle>            _maximumCreaseAngle;
+        optional<bool>             _useGPULines;
         
         void tileAndBuildPolygon(
             Geometry*               input,
@@ -108,7 +133,7 @@ namespace osgEarth { namespace Features
 
         osg::Geode* processPolygons        (FeatureList& input, FilterContext& cx);
         osg::Geode* processLines           (FeatureList& input, FilterContext& cx);
-        osg::Geode* processPolygonizedLines(FeatureList& input, bool twosided, FilterContext& cx);
+        osg::Group* processPolygonizedLines(FeatureList& input, bool twosided, FilterContext& cx);
         osg::Geode* processPoints          (FeatureList& input, FilterContext& cx);
 
         void calculateStippleGeometries(Geometry* input, const SpatialReference* srs,

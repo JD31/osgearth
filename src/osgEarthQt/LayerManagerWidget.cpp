@@ -23,8 +23,8 @@
 #include <osgEarthQt/DataManager>
 #include <osgEarthQt/GuiActions>
 
-
 #include <osgEarth/Map>
+#include <osgEarth/ModelLayer>
 #include <osgEarth/Viewpoint>
 #include <osgEarthAnnotation/AnnotationNode>
 
@@ -72,11 +72,11 @@ namespace
   public:
     WidgetImageLayerCallback(ImageLayerControlWidget* widget) : _widget(widget) {}
 
-    void onOpacityChanged(ImageLayer* layer)
-    {
-      if (_widget)
-        _widget->setLayerOpacity(layer->getOpacity());
-    }
+    //void onOpacityChanged(ImageLayer* layer)
+    //{
+    //  if (_widget)
+    //    _widget->setLayerOpacity(layer->getOpacity());
+    //}
 
     void onEnabledChanged(TerrainLayer* layer)
     {
@@ -381,7 +381,7 @@ void ElevationLayerControlWidget::onEnabledCheckStateChanged(int state)
 void ElevationLayerControlWidget::onRemoveClicked(bool checked)
 {
   if (_parent && _parent->getMap())
-    _parent->getMap()->removeElevationLayer(_layer);
+    _parent->getMap()->removeLayer(_layer);
 }
 
 void ElevationLayerControlWidget::setLayerVisible(bool visible)
@@ -497,7 +497,7 @@ void ImageLayerControlWidget::onSliderValueChanged(int value)
 void ImageLayerControlWidget::onRemoveClicked(bool checked)
 {
   if (_parent && _parent->getMap())
-    _parent->getMap()->removeImageLayer(_layer);
+    _parent->getMap()->removeLayer(_layer);
 }
 
 void ImageLayerControlWidget::setLayerVisible(bool visible)
@@ -597,7 +597,7 @@ void ModelLayerControlWidget::onEnabledCheckStateChanged(int state)
 void ModelLayerControlWidget::onRemoveClicked(bool checked)
 {
   if (_parent && _parent->getMap())
-    _parent->getMap()->removeModelLayer(_layer);
+    _parent->getMap()->removeLayer(_layer);
 }
 
 void ModelLayerControlWidget::setLayerVisible(bool visible)
@@ -749,21 +749,21 @@ void LayerManagerWidget::refresh()
   if (_type == IMAGE_LAYERS)
   {
     osgEarth::ImageLayerVector layers;
-    _map->getImageLayers(layers);
+    _map->getLayers(layers);
     for (osgEarth::ImageLayerVector::const_iterator it = layers.begin(); it != layers.end(); ++it)
       addImageLayerItem(*it);
   }
   else if (_type == MODEL_LAYERS)
   {
     osgEarth::ModelLayerVector layers;
-    _map->getModelLayers(layers);
+    _map->getLayers(layers);
     for (osgEarth::ModelLayerVector::const_iterator it = layers.begin(); it != layers.end(); ++it)
       addModelLayerItem(*it);
   }
   else if (_type == ELEVATION_LAYERS)
   {
     osgEarth::ElevationLayerVector layers;
-    _map->getElevationLayers(layers);
+    _map->getLayers(layers);
     for (osgEarth::ElevationLayerVector::const_iterator it = layers.begin(); it != layers.end(); ++it)
       addElevationLayerItem(*it);
   }
@@ -896,19 +896,19 @@ void LayerManagerWidget::doLayerWidgetDrop(LayerControlWidgetBase* widget, Layer
     {
       ElevationLayerControlWidget* elevWidget = dynamic_cast<ElevationLayerControlWidget*>(widget);
       if (elevWidget)
-        _map->moveElevationLayer(elevWidget->layer(), newRow >= 0 ? newRow : _stack->count() - 1);
+        _map->moveLayer(elevWidget->layer(), newRow >= 0 ? newRow : _stack->count() - 1);
     }
     else if (_type == IMAGE_LAYERS)
     {
       ImageLayerControlWidget* imageWidget = dynamic_cast<ImageLayerControlWidget*>(widget);
       if (imageWidget)
-        _map->moveImageLayer(imageWidget->layer(), newRow >= 0 ? newRow : _stack->count() - 1);
+        _map->moveLayer(imageWidget->layer(), newRow >= 0 ? newRow : _stack->count() - 1);
     }
     else if (_type == MODEL_LAYERS)
     {
       ModelLayerControlWidget* modelWidget = dynamic_cast<ModelLayerControlWidget*>(widget);
       if (modelWidget)
-        _map->moveModelLayer(modelWidget->layer(), newRow >= 0 ? newRow : _stack->count() - 1);
+        _map->moveLayer(modelWidget->layer(), newRow >= 0 ? newRow : _stack->count() - 1);
     }
   }
 }

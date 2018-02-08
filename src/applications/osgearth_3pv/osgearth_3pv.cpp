@@ -236,7 +236,7 @@ main( int argc, char** argv )
 
     MapNode* mapNode = MapNode::get(node.get());
 
-    osg::ref_ptr<osg::Image> icon = osgDB::readImageFile("../data/placemark32.png");
+    osg::ref_ptr<osg::Image> icon = osgDB::readRefImageFile("../data/placemark32.png");
     PlaceNode* place = new PlaceNode(mapNode, GeoPoint::INVALID, icon.get(), "");
     place->getOrCreateStateSet()->setRenderBinDetails(10, "DepthSortedBin");
     place->setDynamic(true);
@@ -249,7 +249,7 @@ main( int argc, char** argv )
 
     mapNode->addChild(new HorizonNode());
 
-    viewer.getView(1)->getCamera()->addCullCallback( new VisitorData::Install("osgEarth.Stealth") );
+    viewer.getView(1)->getCamera()->setCullCallback( new VisitorData::Install("osgEarth.Stealth") );
 
     while (!viewer.done())
     {

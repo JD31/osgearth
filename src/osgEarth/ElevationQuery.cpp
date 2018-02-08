@@ -17,7 +17,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 #include <osgEarth/ElevationQuery>
-#include <osgEarth/DPLineSegmentIntersector>
+#include <osgUtil/LineSegmentIntersector>
+#include <osgEarth/Map>
+#include <osgEarth/ElevationPool>
 #include <osgUtil/IntersectionVisitor>
 #include <osgSim/LineOfSight>
 
@@ -44,7 +46,7 @@ ElevationQuery::ElevationQuery(const MapFrame& mapFrame)
 void
 ElevationQuery::setMap(const Map* map)
 {
-    _mapf = MapFrame(map, (Map::ModelParts)(Map::TERRAIN_LAYERS | Map::MODEL_LAYERS));
+    _mapf.setMap(map);
     reset();
 }
 
@@ -83,8 +85,10 @@ ElevationQuery::gatherPatchLayers()
 {
     // cache a vector of terrain patch models.
     _patchLayers.clear();
-    for(ModelLayerVector::const_iterator i = _mapf.modelLayers().begin();
-        i != _mapf.modelLayers().end();
+    ModelLayerVector modelLayers;
+    _mapf.getLayers(modelLayers);
+    for(ModelLayerVector::const_iterator i = modelLayers.begin();
+        i != modelLayers.end();
         ++i)
     {
         if ( i->get()->isTerrainPatch() )
@@ -126,8 +130,13 @@ ElevationQuery::getElevations(std::vector<osg::Vec3d>& points,
         float elevation;
         double z = (*i).z();
         GeoPoint p(pointsSRS, *i, ALTMODE_ABSOLUTE);
-        if ( getElevationImpl(p, elevation, desiredResolution, 0L) )
+        if ( getElevationImpl(p, elevation, desiredResolution, 0L))
         {
+            if (elevation == NO_DATA_VALUE)
+            {
+                elevation = 0.0;
+            }
+
             (*i).z() = ignoreZ ? elevation : elevation + z;
         }
     }
@@ -203,7 +212,7 @@ ElevationQuery::getElevationImpl(const GeoPoint& point,
                     // first time through, set up the intersector on demand
                     if ( !_patchLayersLSI.valid() )
                     {
-                        _patchLayersLSI = new DPLineSegmentIntersector(start, end);
+                        _patchLayersLSI = new osgUtil::LineSegmentIntersector(start, end);
                         _patchLayersLSI->setIntersectionLimit( _patchLayersLSI->LIMIT_NEAREST );
                     }
                     else
@@ -243,7 +252,7 @@ ElevationQuery::getElevationImpl(const GeoPoint& point,
     if ( _mapf.elevationLayers().empty() )
     {
         // this means there are no heightfields.
-        out_elevation = 0.0;
+        out_elevation = NO_DATA_VALUE;
         return true;
     }
 
@@ -265,7 +274,7 @@ ElevationQuery::getElevationImpl(const GeoPoint& point,
     if (!_envelope.valid() ||
         !point.getSRS()->isHorizEquivalentTo(_envelope->getSRS()) ||
         lod != _envelope->getLOD())
-    {
+    {        
         _envelope = _mapf.getElevationPool()->createEnvelope(point.getSRS(), lod);
     }
 

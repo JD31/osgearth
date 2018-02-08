@@ -41,6 +41,8 @@
 #include <osgEarthAnnotation/AnnotationRegistry>
 #include <osgEarth/ScreenSpaceLayout>
 #include <osgEarth/TerrainEngineNode>
+#include <osgEarth/NodeUtils>
+#include <osgEarth/FileUtils>
 
 #include <osgEarth/XmlUtils>
 #include <osgEarth/StringUtils>
@@ -268,7 +270,7 @@ MapNodeHelper::load(osg::ArgumentParser&  args,
     myReadOptions->setPluginStringData("osgEarth.defaultOptions", defMNO.getConfig().toJSON());
 
     // read in the Earth file:
-    osg::Node* node = osgDB::readNodeFiles(args, myReadOptions.get());
+    osg::ref_ptr<osg::Node> node = osgDB::readNodeFiles(args, myReadOptions.get());
 
     osg::ref_ptr<MapNode> mapNode;
     if ( !node )
@@ -285,7 +287,7 @@ MapNodeHelper::load(osg::ArgumentParser&  args,
     }
     else
     {
-        mapNode = MapNode::get(node);
+        mapNode = MapNode::get(node.get());
         if ( !mapNode.valid() )
         {
             OE_WARN << LC << "Loaded scene graph does not contain a MapNode - aborting" << std::endl;
@@ -482,6 +484,14 @@ MapNodeHelper::parse(MapNode*             mapNode,
     // Configure for an ortho camera:
     if ( args.read("--ortho") )
     {
+        EarthManipulator* em = dynamic_cast<EarthManipulator*>(view->getCameraManipulator());
+        if (em)
+        {
+            double V, A, N, F;
+            view->getCamera()->getProjectionMatrixAsPerspective(V, A, N, F);
+            em->setInitialVFOV( V );
+        }
+
         view->getCamera()->setProjectionMatrixAsOrtho(-1, 1, -1, 1, 0, 1);
     }
 
@@ -538,7 +548,7 @@ MapNodeHelper::parse(MapNode*             mapNode,
             mapNode->getMap()->beginUpdate();
             for( ImageLayerVector::iterator i = imageLayers.begin(); i != imageLayers.end(); ++i )
             {
-                mapNode->getMap()->addImageLayer( i->get() );
+                mapNode->getMap()->addLayer( i->get() );
             }
             mapNode->getMap()->endUpdate();
         }
@@ -550,17 +560,6 @@ MapNodeHelper::parse(MapNode*             mapNode,
     if ( !vertScaleConf.empty() )
     {
         mapNode->getTerrainEngine()->addEffect( new VerticalScale(vertScaleConf) );
-    }
-
-    // Install a contour map effect.
-    if (args.read("--contourmap"))
-    {
-        mapNode->addExtension(Extension::create("contourmap", ConfigOptions()));
-
-        // with the cmdline switch, hids all the image layer so we can see the contour map.
-        for (unsigned i = 0; i < mapNode->getMap()->getNumImageLayers(); ++i) {
-            mapNode->getMap()->getImageLayerAt(i)->setVisible(false);
-        }
     }
 
     // Generic named value uniform with min/max.
@@ -606,7 +605,8 @@ MapNodeHelper::parse(MapNode*             mapNode,
     // Simple sky model:
     if (args.read("--sky"))
     {
-        mapNode->addExtension(Extension::create("sky_simple", ConfigOptions()) );
+        std::string ext = mapNode->getMap()->isGeocentric() ? "sky_simple" : "sky_gl";
+        mapNode->addExtension(Extension::create(ext, ConfigOptions()) );
     }
 
     // Simple ocean model:
@@ -655,11 +655,10 @@ MapNodeHelper::parse(MapNode*             mapNode,
             caster->setTextureImageUnit( unit );
             caster->setLight( view->getLight() );
             caster->getShadowCastingGroup()->addChild( mapNode->getModelLayerGroup() );
-            //insertParent(caster, mapNode);
-            //root = findTopOfGraph(caster)->asGroup();
+            caster->getShadowCastingGroup()->addChild(mapNode->getTerrainEngine());
             if ( mapNode->getNumParents() > 0 )
             {
-                insertGroup(caster, mapNode->getParent(0));
+                osgEarth::insertGroup(caster, mapNode->getParent(0));
             }
             else
             {

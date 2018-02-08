@@ -90,9 +90,10 @@ _horizonCullingRequested( DEFAULT_HORIZON_CULLING )
 
 void
 GeoPositionNode::init()
-{    
+{
+    this->removeChildren(0, this->getNumChildren());
+
     _geoxform = new GeoTransform();
-    _geoxform->setAutoRecomputeHeights( true );
     this->addChild( _geoxform );
 
     _paxform = new osg::PositionAttitudeTransform();
@@ -169,6 +170,33 @@ GeoPositionNode::applyStyle(const Style& style)
     AnnotationNode::applyStyle( style );
 }
 
+void
+GeoPositionNode::setPosition(const GeoPoint& pos)
+{
+    GeoPoint pos2 = pos;
+
+    // The altitude symbol, if there is one, overrides the incoming GeoPoint:
+    const AltitudeSymbol* alt = getStyle().get<AltitudeSymbol>();
+    if (alt)
+    {
+        if (alt->clamping() == alt->CLAMP_TO_TERRAIN)
+        {
+            pos2.z() = 0;
+            pos2.altitudeMode() = ALTMODE_RELATIVE;
+        }
+        else if (alt->clamping() == alt->CLAMP_RELATIVE_TO_TERRAIN)
+        {
+            pos2.altitudeMode() = ALTMODE_RELATIVE;
+        }
+        else if (alt->clamping() == alt->CLAMP_NONE)
+        {
+            pos2.altitudeMode() = ALTMODE_ABSOLUTE;
+        }
+    }
+    _geoxform->setPosition( pos2 );
+    dirty();
+}
+
 bool
 GeoPositionNode::getOcclusionCulling() const
 {
@@ -217,8 +245,9 @@ void GeoPositionNode::setOcclusionCullingMaxAltitude( double occlusionCullingMax
 
 
 GeoPositionNode::GeoPositionNode(MapNode* mapNode, const Config& conf) :
-AnnotationNode          ( conf ),
-_horizonCullingRequested( true )
+AnnotationNode            ( conf ),
+_occlusionCullingRequested( DEFAULT_OCCLUSION_CULLING ),
+_horizonCullingRequested  ( DEFAULT_HORIZON_CULLING )
 {
     init();
     GeoPositionNode::setMapNode( mapNode );
@@ -229,6 +258,10 @@ void
 GeoPositionNode::setConfig(const Config& conf)
 {
     //AnnotationNode::setConfig(conf);
+    if (conf.hasValue("name"))
+    {
+        setName(conf.value("name"));
+    }
 
     if ( conf.hasChild( "position" ) )
     {

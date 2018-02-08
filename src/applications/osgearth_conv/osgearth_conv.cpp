@@ -26,6 +26,8 @@
 #include <osgEarth/TileSource>
 #include <osgEarth/TileHandler>
 #include <osgEarth/TileVisitor>
+#include <osgEarth/ImageLayer>
+#include <osgEarth/ElevationLayer>
 #include <osg/ArgumentParser>
 #include <osg/Timer>
 #include <iomanip>
@@ -54,44 +56,6 @@ int usage(char** argv)
 }
 
 
-// TileHandler that copies images from one tilesource to another.
-struct TileSourceToTileSource : public TileHandler
-{
-    TileSourceToTileSource(TileSource* source, TileSource* dest, bool heightFields)
-        : _source(source), _dest(dest), _heightFields(heightFields)
-    {
-        //nop
-    }
-
-    bool handleTile(const TileKey& key, const TileVisitor& tv)
-    {
-        bool ok = false;
-        if (_heightFields)
-        {
-            osg::ref_ptr<osg::HeightField> hf = _source->createHeightField(key);
-            if ( hf.valid() )
-                ok = _dest->storeHeightField(key, hf.get(), 0L);
-        }
-        else
-        {
-            osg::ref_ptr<osg::Image> image = _source->createImage(key);
-            if ( image.valid() )
-                ok = _dest->storeImage(key, image.get(), 0L);
-        }
-        return ok;
-    }
-
-    bool hasData(const TileKey& key) const
-    {
-        return _source->hasData(key);
-    }
-
-    TileSource* _source;
-    TileSource* _dest;
-    bool        _heightFields;
-};
-
-
 // TileHandler that copies images from an ImageLayer to a TileSource.
 // This will automatically handle any mosaicing and reprojection that is
 // necessary to translate from one Profile/SRS to another.
@@ -115,7 +79,7 @@ struct ImageLayerToTileSource : public TileHandler
 
     bool hasData(const TileKey& key) const
     {
-        return _source->getTileSource()->hasData(key);
+        return _source->mayHaveDataInExtent(key.getExtent());
     }
 
     osg::ref_ptr<ImageLayer> _source;
@@ -145,7 +109,7 @@ struct ElevationLayerToTileSource : public TileHandler
 
     bool hasData(const TileKey& key) const
     {
-        return _source->getTileSource()->hasData(key);
+        return _source->mayHaveDataInExtent(key.getExtent());
     }
 
     osg::ref_ptr<ElevationLayer> _source;
@@ -156,6 +120,8 @@ struct ElevationLayerToTileSource : public TileHandler
 // Custom progress reporter
 struct ProgressReporter : public osgEarth::ProgressCallback
 {
+    ProgressReporter() : _first(true) { }
+
     bool reportProgress(double             current,
                         double             total,
                         unsigned           currentStage,
@@ -164,13 +130,32 @@ struct ProgressReporter : public osgEarth::ProgressCallback
     {
         _mutex.lock();
 
-        float percentage = current/total*100.0f;
+        if (_first)
+        {
+            _first = false;
+            _start = osg::Timer::instance()->tick();
+        }
+        osg::Timer_t now = osg::Timer::instance()->tick();
+
+        
+
+        float percentage = current/total;
+
+        double timeSoFar = osg::Timer::instance()->delta_s(_start, now);
+        double projectedTotalTime = timeSoFar/percentage;
+        double timeToGo = projectedTotalTime - timeSoFar;
+        double minsToGo = timeToGo/60.0;
+        double secsToGo = fmod(timeToGo,60.0);
+        double minsTotal = projectedTotalTime/60.0;
+        double secsTotal = fmod(projectedTotalTime,60.0);
+
         std::cout
             << std::fixed
             << std::setprecision(1) << "\r"
             << (int)current << "/" << (int)total
-            << " (" << percentage << "%)"
-            << "                        "
+            << " (" << (100.0f*percentage) << "%, " 
+            << (int)minsTotal << "m" << (int)secsTotal << "s projected, "
+            << (int)minsToGo << "m" << (int)secsToGo << "s remaining)        "
             << std::flush;
 
         if ( percentage >= 100.0f )
@@ -182,6 +167,8 @@ struct ProgressReporter : public osgEarth::ProgressCallback
     }
 
     Threading::Mutex _mutex;
+    bool _first;
+    osg::Timer_t _start;
 };
 
 
@@ -256,7 +243,7 @@ main(int argc, char** argv)
     Status inputStatus = input->open( input->MODE_READ, dbo.get() );
     if ( inputStatus.isError() )
     {
-        OE_WARN << LC << "Error initializing input" << std::endl;
+        OE_WARN << LC << "Error initializing input: " << inputStatus.message() << std::endl;
         return -1;
     }
 
@@ -297,7 +284,7 @@ main(int argc, char** argv)
     osg::ref_ptr<TileSource> output = TileSourceFactory::create(outOptions);
     if ( !output.valid() )
     {
-        OE_WARN << LC << "Failed to open output" << std::endl;
+        OE_WARN << LC << "Failed to open output." << std::endl;
         return -1;
     }
 
@@ -319,7 +306,7 @@ main(int argc, char** argv)
 
     if ( outputStatus.isError() )
     {
-        OE_WARN << LC << "Error initializing output" << std::endl;
+        OE_WARN << LC << "Error initializing output: " << outputStatus.message() << std::endl;
         return -1;
     }
 
@@ -347,48 +334,48 @@ main(int argc, char** argv)
         visitor = new TileVisitor();
     }
 
-    // If the profiles are identical, just use a tile copier.
-    if ( isSameProfile )
+    if (heightFields)
     {
-        OE_NOTICE << LC << "Profiles match - initiating simple tile copy" << std::endl;
-        visitor->setTileHandler( new TileSourceToTileSource(input.get(), output.get(), heightFields) );
+        ElevationLayer* layer = new ElevationLayer(ElevationLayerOptions(), input.get());
+        Status layerStatus = layer->open();
+        if (layerStatus.isError())
+        {
+            OE_WARN << "Failed to create input ElevationLayer " << layerStatus.message() << std::endl;
+            return -1;
+        }
+        if ( !layer->getProfile() || !layer->getProfile()->isOK() )
+        {
+            OE_WARN << LC << "Input profile is not valid" << std::endl;
+            return -1;
+        }
+        visitor->setTileHandler( new ElevationLayerToTileSource(layer, output.get()) );
     }
-    else
-    {
-        OE_NOTICE << LC << "Profiles differ - initiating tile transformation" << std::endl;
 
-        if (heightFields)
+    else // image layers
+    {
+        ImageLayer* layer = new ImageLayer(ImageLayerOptions(), input.get());
+        Status layerStatus = layer->open();
+        if (layerStatus.isError())
         {
-            ElevationLayer* layer = new ElevationLayer(ElevationLayerOptions(), input.get());
-            Status layerStatus = layer->open();
-            if (layerStatus.isError())
-            {
-                OE_WARN << "Failed to create input ElevationLayer " << layerStatus.message() << std::endl;
-                return -1;
-            }
-            if ( !layer->getProfile() || !layer->getProfile()->isOK() )
-            {
-                OE_WARN << LC << "Input profile is not valid" << std::endl;
-                return -1;
-            }
-            visitor->setTileHandler( new ElevationLayerToTileSource(layer, output.get()) );
+            OE_WARN << "Failed to create input ImageLayer " << layerStatus.message() << std::endl;
+            return -1;
         }
-        else
+        if ( !layer->getProfile() || !layer->getProfile()->isOK() )
         {
-            ImageLayer* layer = new ImageLayer(ImageLayerOptions(), input.get());
-            Status layerStatus = layer->open();
-            if (layerStatus.isError())
-            {
-                OE_WARN << "Failed to create input ImageLayer " << layerStatus.message() << std::endl;
-                return -1;
-            }
-            if ( !layer->getProfile() || !layer->getProfile()->isOK() )
-            {
-                OE_WARN << LC << "Input profile is not valid" << std::endl;
-                return -1;
-            }
-            visitor->setTileHandler( new ImageLayerToTileSource(layer, output.get()) );
+            OE_WARN << LC << "Input profile is not valid" << std::endl;
+            return -1;
         }
+        visitor->setTileHandler( new ImageLayerToTileSource(layer, output.get()) );
+    }
+
+    // set the manula extents, if specified:
+    bool userSetExtents = false;
+    double minlat, minlon, maxlat, maxlon;
+    while( args.read("--extents", minlat, minlon, maxlat, maxlon) )
+    {
+        GeoExtent extent(SpatialReference::get("wgs84"), minlon, minlat, maxlon, maxlat);
+        visitor->addExtent( extent );
+        userSetExtents = true;
     }
 
     // Set the level limits:
@@ -409,6 +396,11 @@ main(int argc, char** argv)
                 maxLevel = i->maxLevel().value();
             if ( !minLevelSet && i->minLevel().isSet() && i->minLevel().value() < minLevel )
                 minLevel = i->minLevel().value();
+
+            if (userSetExtents == false)
+            {
+                visitor->addExtent(*i);
+            }
         }
     }
 
@@ -422,14 +414,6 @@ main(int argc, char** argv)
         maxLevel = outputProfile->getEquivalentLOD( input->getProfile(), maxLevel );
         visitor->setMaxLevel( maxLevel );
         OE_NOTICE << LC << "Calculated max level = " << maxLevel << std::endl;
-    }
-
-    // set the extents:
-    double minlat, minlon, maxlat, maxlon;
-    while( args.read("--extents", minlat, minlon, maxlat, maxlon) )
-    {
-        GeoExtent extent(SpatialReference::get("wgs84"), minlon, minlat, maxlon, maxlat);
-        visitor->addExtent( extent );
     }
 
     // Ready!!!

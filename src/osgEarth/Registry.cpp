@@ -40,6 +40,7 @@
 
 #include <gdal_priv.h>
 #include <ogr_api.h>
+#include <cpl_error.h>
 #include <stdlib.h>
 #include <locale>
 
@@ -54,6 +55,13 @@ using namespace OpenThreads;
 
 #define LC "[Registry] "
 
+namespace
+{
+    void CPL_STDCALL myCPLErrorHandler(CPLErr errClass, int errNum, const char* msg)
+    {
+        OE_DEBUG << "[GDAL] " << msg << " (error " << errNum << ")" << std::endl;
+    }
+}
 
 Registry::Registry() :
 osg::Referenced     ( true ),
@@ -64,15 +72,20 @@ _caps               ( 0L ),
 _defaultFont        ( 0L ),
 _terrainEngineDriver( "mp" ),
 _cacheDriver        ( "filesystem" ),
-_overrideCachePolicyInitialized( false )
+_overrideCachePolicyInitialized( false ),
+_threadPoolSize(2u),
+_devicePixelRatio(1.0f)
 {
     // set up GDAL and OGR.
     OGRRegisterAll();
     GDALAllRegister();
-    
+
     // support Chinese character in the file name and attributes in ESRI's shapefile
     CPLSetConfigOption("GDAL_FILENAME_IS_UTF8","NO");
     CPLSetConfigOption("SHAPE_ENCODING","");
+
+    // Redirect GDAL/OGR console errors to our own handler
+    CPLPushErrorHandler(myCPLErrorHandler);
 
     // global initialization for CURL (not thread safe)
     HTTPClient::globalInit();
@@ -109,11 +122,13 @@ _overrideCachePolicyInitialized( false )
     osgDB::Registry::instance()->addMimeTypeExtensionMapping( "text/x-json",                          "osgb" );
     osgDB::Registry::instance()->addMimeTypeExtensionMapping( "image/jpg",                            "jpg" );
     osgDB::Registry::instance()->addMimeTypeExtensionMapping( "image/dds",                            "dds" );
-    
+    // This is not correct, but some versions of readymap can return tif with one f instead of two.
+    osgDB::Registry::instance()->addMimeTypeExtensionMapping( "image/tif",                            "tif" );
+
     // pre-load OSG's ZIP plugin so that we can use it in URIs
     std::string zipLib = osgDB::Registry::instance()->createLibraryNameForExtension( "zip" );
     if ( !zipLib.empty() )
-        osgDB::Registry::instance()->loadLibrary( zipLib );    
+        osgDB::Registry::instance()->loadLibrary( zipLib );
 
     // set up our default r/w options to NOT cache archives!
     _defaultOptions = new osgDB::Options();
@@ -123,26 +138,34 @@ _overrideCachePolicyInitialized( false )
     if ( teStr )
     {
         _terrainEngineDriver = std::string(teStr);
+        _overrideTerrainEngineDriverName = std::string(teStr);
+        OE_INFO << LC << "Terrain engine set from environment: " << _terrainEngineDriver << std::endl;
     }
 
     // load a default font
     const char* envFont = ::getenv("OSGEARTH_DEFAULT_FONT");
     if ( envFont )
     {
-        _defaultFont = osgText::readFontFile( std::string(envFont) );
+        _defaultFont = osgText::readRefFontFile( std::string(envFont) );
+        OE_INFO << LC << "Default font set from environment: " << envFont << std::endl;
     }
     if ( !_defaultFont.valid() )
     {
 #ifdef WIN32
-        _defaultFont = osgText::readFontFile("arial.ttf");
+        _defaultFont = osgText::readRefFontFile("arial.ttf");
+#else
+        _defaultFont = osgText::Font::getDefaultFont();
 #endif
     }
+
+#if OSG_VERSION_LESS_THAN(3,5,8)
     if ( _defaultFont.valid() )
     {
         // mitigates mipmapping issues that cause rendering artifacts
         // for some fonts/placement
         _defaultFont->setGlyphImageMargin( 2 );
     }
+#endif
 
     // register the system stock Units.
     Units::registerAll( this );
@@ -150,16 +173,17 @@ _overrideCachePolicyInitialized( false )
 
 Registry::~Registry()
 {
-    //nop
+    // pop the custom error handler
+    CPLPopErrorHandler();
 }
 
-Registry* 
+Registry*
 Registry::instance(bool erase)
 {
     static osg::ref_ptr<Registry> s_registry = new Registry;
 
-    if (erase) 
-    {   
+    if (erase)
+    {
         s_registry->destruct();
         s_registry = 0;
     }
@@ -167,21 +191,17 @@ Registry::instance(bool erase)
     return s_registry.get(); // will return NULL on erase
 }
 
-void 
+void
 Registry::destruct()
 {
     //nop
 }
 
-
-OpenThreads::ReentrantMutex&
-Registry::getGDALMutex()
+OpenThreads::ReentrantMutex& osgEarth::getGDALMutex()
 {
-    //_numGdalMutexGets++;
-    //OE_NOTICE << "GDAL = " << _numGdalMutexGets << std::endl;
+    static OpenThreads::ReentrantMutex _gdal_mutex;
     return _gdal_mutex;
 }
-
 
 const Profile*
 Registry::getGlobalGeodeticProfile() const
@@ -314,7 +334,7 @@ Registry::getDefaultCacheDriverName() const
             {
                 _cacheDriver = value;
                 OE_DEBUG << LC << "Cache driver set from environment: " << value << std::endl;
-            }        
+            }
         }
     }
     return _cacheDriver.get();
@@ -356,6 +376,7 @@ Registry::overrideCachePolicy() const
                 {
                     TimeSpan maxAge = osgEarth::as<long>( std::string(cacheMaxAge), INT_MAX );
                     _overrideCachePolicy->maxAge() = maxAge;
+                    OE_INFO << LC << "Cache max age set from environment: " << cacheMaxAge << std::endl;
                 }
             }
 
@@ -460,7 +481,7 @@ Registry::initCapabilities()
         _caps = new Capabilities();
 }
 
-const ShaderFactory*
+ShaderFactory*
 Registry::getShaderFactory() const
 {
     return _shaderLib.get();
@@ -485,17 +506,17 @@ Registry::setShaderGenerator(ShaderGenerator* shaderGen)
     if ( shaderGen != 0L && shaderGen != _shaderGen.get() )
         _shaderGen = shaderGen;
 }
-        
+
 void
-Registry::setURIReadCallback( URIReadCallback* callback ) 
-{ 
+Registry::setURIReadCallback( URIReadCallback* callback )
+{
     _uriReadCallback = callback;
 }
 
 URIReadCallback*
 Registry::getURIReadCallback() const
 {
-    return _uriReadCallback.get(); 
+    return _uriReadCallback.get();
 }
 
 void
@@ -521,7 +542,7 @@ Registry::createUID()
 }
 
 const osgDB::Options*
-Registry::getDefaultOptions() const 
+Registry::getDefaultOptions() const
 {
     return _defaultOptions.get();
 }
@@ -529,8 +550,8 @@ Registry::getDefaultOptions() const
 osgDB::Options*
 Registry::cloneOrCreateOptions(const osgDB::Options* input)
 {
-    osgDB::Options* newOptions = 
-        input ? static_cast<osgDB::Options*>(input->clone(osg::CopyOp::DEEP_COPY_USERDATA)) : 
+    osgDB::Options* newOptions =
+        input ? static_cast<osgDB::Options*>(input->clone(osg::CopyOp::DEEP_COPY_USERDATA)) :
         new osgDB::Options();
 
     // clear the CACHE_ARCHIVES flag because it is evil
@@ -567,11 +588,11 @@ Registry::getUnits(const std::string& name) const
     return 0L;
 }
 
-void
-Registry::setDefaultTerrainEngineDriverName(const std::string& name)
-{
-    _terrainEngineDriver = name;
-}
+//void
+//Registry::setDefaultTerrainEngineDriverName(const std::string& name)
+//{
+//    _terrainEngineDriver = name;
+//}
 
 void
 Registry::setDefaultCacheDriverName(const std::string& name)
@@ -641,9 +662,9 @@ Registry::getActivities(std::set<std::string>& output)
     }
 }
 
-std::string 
+std::string
 Registry::getExtensionForMimeType(const std::string& mt)
-{            
+{
     std::string mt_lower = osgEarth::toLower(mt);
 
     const osgDB::Registry::MimeTypeExtensionMap& exmap = osgDB::Registry::instance()->getMimeTypeExtensionMap();
@@ -657,9 +678,9 @@ Registry::getExtensionForMimeType(const std::string& mt)
     return std::string();
 }
 
-std::string 
+std::string
 Registry::getMimeTypeForExtension(const std::string& ext)
-{            
+{
     std::string ext_lower = osgEarth::toLower(ext);
 
     const osgDB::Registry::MimeTypeExtensionMap& exmap = osgDB::Registry::instance()->getMimeTypeExtensionMap();
@@ -685,6 +706,18 @@ Registry::getOffLimitsTextureImageUnits() const
 {
     Threading::ScopedMutexLock exclusive(_regMutex);
     return _offLimitsTextureImageUnits;
+}
+
+float
+Registry::getDevicePixelRatio() const
+{
+    return _devicePixelRatio;
+}
+
+void
+Registry::setDevicePixelRatio(float devicePixelRatio)
+{
+    _devicePixelRatio = devicePixelRatio;
 }
 
 

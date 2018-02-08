@@ -18,6 +18,7 @@
  */
 #include <osgEarth/MapFrame>
 #include <osgEarth/Cache>
+#include <osgEarth/Map>
 #include <osgEarth/ElevationPool>
 
 using namespace osgEarth;
@@ -27,8 +28,7 @@ using namespace osgEarth;
 MapFrame::MapFrame() :
 _initialized    ( false ),
 _highestMinLevel( 0 ),
-_mapInfo       ( 0L ),
-_parts(Map::ENTIRE_MODEL)
+_mapInfo        ( 0L )
 {
     //nop
 }
@@ -37,13 +37,10 @@ MapFrame::MapFrame(const MapFrame& rhs) :
 _initialized         ( rhs._initialized ),
 _map                 ( rhs._map.get() ),
 _mapInfo             ( rhs._mapInfo ),
-_parts               ( rhs._parts ),
 _highestMinLevel     ( rhs._highestMinLevel ),
 _mapDataModelRevision( rhs._mapDataModelRevision ),
-_imageLayers         ( rhs._imageLayers ),
-_elevationLayers     ( rhs._elevationLayers ),
-_modelLayers         ( rhs._modelLayers ),
-_maskLayers          ( rhs._maskLayers )
+_layers              ( rhs._layers ),
+_pool                ( rhs._pool.get() )
 {
     //no sync required here; we copied the arrays etc
 }
@@ -52,17 +49,6 @@ MapFrame::MapFrame(const Map* map) :
 _initialized    ( false ),
 _map            ( map ),
 _mapInfo        ( map ),
-_parts          ( Map::ENTIRE_MODEL ),
-_highestMinLevel( 0 )
-{
-    sync();
-}
-
-MapFrame::MapFrame(const Map* map, Map::ModelParts parts) :
-_initialized    ( false ),
-_map            ( map ),
-_mapInfo        ( map ),
-_parts          ( parts ),
 _highestMinLevel( 0 )
 {
     sync();
@@ -77,25 +63,28 @@ MapFrame::isValid() const
 void
 MapFrame::setMap(const Map* map)
 {
-    _imageLayers.clear();
-    _elevationLayers.clear();
-    _modelLayers.clear();
-    _maskLayers.clear();
+    _layers.clear();
+    _pool = 0L;
 
     _map = map;
     if ( map )
-        _mapInfo = MapInfo(map);
+    {
+        _mapInfo.setMap(map);
+    }
 
     _initialized = false;
     _highestMinLevel = 0;
 
-    sync();
+    if (map)
+    {
+        sync();
+    }
 }
 
 ElevationPool*
 MapFrame::getElevationPool() const
 {
-    return _map->getElevationPool();
+    return static_cast<ElevationPool*>(_pool.get());
 }
 
 bool
@@ -106,19 +95,19 @@ MapFrame::sync()
     osg::ref_ptr<const Map> map;
     if ( _map.lock(map) )
     {
-        changed = _map->sync( *this );
+        changed = map->sync( *this );
         if ( changed )
         {
             refreshComputedValues();
         }
+        _pool = map->getElevationPool();
     }
     else
     {
-        _imageLayers.clear();
+        _layers.clear();
         _elevationLayers.clear();
-        _modelLayers.clear();
-        _maskLayers.clear();
-    }
+        changed = true;
+    }    
 
     return changed;
 }
@@ -136,6 +125,15 @@ MapFrame::needsSync() const
         (map->getDataModelRevision() != _mapDataModelRevision || !_initialized);
 }
 
+void
+MapFrame::release()
+{
+    _layers.clear();
+    _pool = 0L;
+    _initialized = false;
+    _highestMinLevel = 0;
+}
+
 UID
 MapFrame::getUID() const
 {
@@ -146,28 +144,39 @@ MapFrame::getUID() const
         return (UID)0;
 }
 
+bool
+MapFrame::containsLayer(UID uid) const
+{
+    for (LayerVector::const_iterator i = _layers.begin(); i != _layers.end(); ++i)
+        if (i->get()->getUID() == uid)
+            return true;
+    return false;
+}
+
 void
 MapFrame::refreshComputedValues()
 {
-    // cache the min LOD based on all image/elev layers
     _highestMinLevel = 0;
 
-    for(ImageLayerVector::const_iterator i = _imageLayers.begin(); 
-        i != _imageLayers.end();
-        ++i)
-    {
-        const optional<unsigned>& minLevel = i->get()->getTerrainLayerRuntimeOptions().minLevel();
-        if ( minLevel.isSet() && minLevel.value() > _highestMinLevel )
-            _highestMinLevel = minLevel.value();
-    }
+    _elevationLayers.clear();
 
-    for(ElevationLayerVector::const_iterator i = _elevationLayers.begin(); 
-        i != _elevationLayers.end();
-        ++i)
+    for (LayerVector::const_iterator i = _layers.begin(); i != _layers.end(); ++i)
     {
-        const optional<unsigned>& minLevel = i->get()->getTerrainLayerRuntimeOptions().minLevel();
-        if ( minLevel.isSet() && minLevel.value() > _highestMinLevel )
-            _highestMinLevel = minLevel.value();
+        TerrainLayer* terrainLayer = dynamic_cast<TerrainLayer*>(i->get());
+        if (terrainLayer)
+        {
+            const optional<unsigned>& minLevel = terrainLayer->options().minLevel();
+            if (minLevel.isSet() && minLevel.value() > _highestMinLevel)
+            {
+                _highestMinLevel = minLevel.value();
+            }
+            
+            ElevationLayer* elevation = dynamic_cast<ElevationLayer*>(terrainLayer);
+            if (elevation)
+            {
+                _elevationLayers.push_back(elevation);
+            }
+        }
     }
 }
 
@@ -180,9 +189,11 @@ MapFrame::populateHeightField(osg::ref_ptr<osg::HeightField>& hf,
     osg::ref_ptr<const Map> map;
     if ( _map.lock(map) )
     {        
-        ElevationInterpolation interp = map->getMapOptions().elevationInterpolation().get();    
-        return _elevationLayers.populateHeightField(
+        ElevationInterpolation interp = map->getMapOptions().elevationInterpolation().get();
+
+        return _elevationLayers.populateHeightFieldAndNormalMap(
             hf.get(),
+            0L,         // no normal map to populate
             key,
             convertToHAE ? map->getProfileNoVDatum() : 0L,
             interp,
@@ -194,127 +205,83 @@ MapFrame::populateHeightField(osg::ref_ptr<osg::HeightField>& hf,
     }
 }
 
-
-int
-MapFrame::indexOf( ImageLayer* layer ) const
+bool
+MapFrame::populateHeightFieldAndNormalMap(osg::ref_ptr<osg::HeightField>& hf,
+                                          osg::ref_ptr<NormalMap>&        normalMap,
+                                          const TileKey&                  key,
+                                          bool                            convertToHAE,
+                                          ProgressCallback*               progress) const
 {
-    ImageLayerVector::const_iterator i = std::find( _imageLayers.begin(), _imageLayers.end(), layer );
-    return i != _imageLayers.end() ? i - _imageLayers.begin() : -1;
+    osg::ref_ptr<const Map> map;
+    if ( _map.lock(map) )
+    {        
+        ElevationInterpolation interp = map->getMapOptions().elevationInterpolation().get();
+
+        return _elevationLayers.populateHeightFieldAndNormalMap(
+            hf.get(),
+            normalMap.get(),
+            key,
+            convertToHAE ? map->getProfileNoVDatum() : 0L,
+            interp,
+            progress );
+    }
+    else
+    {
+        return false;
+    }
 }
-
-
-int
-MapFrame::indexOf( ElevationLayer* layer ) const
-{
-    ElevationLayerVector::const_iterator i = std::find( _elevationLayers.begin(), _elevationLayers.end(), layer );
-    return i != _elevationLayers.end() ? i - _elevationLayers.begin() : -1;
-}
-
-
-int
-MapFrame::indexOf( ModelLayer* layer ) const
-{
-    ModelLayerVector::const_iterator i = std::find( _modelLayers.begin(), _modelLayers.end(), layer );
-    return i != _modelLayers.end() ? i - _modelLayers.begin() : -1;
-}
-
-
-ImageLayer*
-MapFrame::getImageLayerByUID( UID uid ) const
-{
-    for(ImageLayerVector::const_iterator i = _imageLayers.begin(); i != _imageLayers.end(); ++i )
-        if ( i->get()->getUID() == uid )
-            return i->get();
-    return 0L;
-}
-
-
-ImageLayer*
-MapFrame::getImageLayerByName( const std::string& name ) const
-{
-    for(ImageLayerVector::const_iterator i = _imageLayers.begin(); i != _imageLayers.end(); ++i )
-        if ( i->get()->getName() == name )
-            return i->get();
-    return 0L;
-}
-
 
 bool
 MapFrame::isCached( const TileKey& key ) const
 {
     // is there a map cache at all?
-    if ( _map.valid() && _map->getCache() == 0L )
+    osg::ref_ptr<const Map> map;
+    if (_map.lock(map) && map->getCache() == 0L)
         return false;
 
-    //Check to see if the tile will load fast
-    // Check the imagery layers
-    for( ImageLayerVector::const_iterator i = imageLayers().begin(); i != imageLayers().end(); i++ )
-    {   
-        const ImageLayer* layer = i->get();
-
-        if (!layer->getEnabled())
-            continue;
-
-        // If we're cache only we should be fast
-        if (layer->getCacheSettings()->cachePolicy()->isCacheOnly())
-            continue;
-
-        // no-cache? always slow
-        if (layer->getCacheSettings()->cachePolicy()->isCacheDisabled())
-            return false;
-
-        // No tile source? skip it
-        osg::ref_ptr< TileSource > source = layer->getTileSource();
-        if (!source.valid())
-            continue;
-
-        //If the tile is blacklisted, it should also be fast.
-        if ( source->getBlacklist()->contains( key ) )
-            continue;
-
-        //If no data is available on this tile, we'll be fast
-        if ( !source->hasData( key ) )
-            continue;
-
-        if ( !layer->isCached(key) )
-            return false;
-    }
-
-    for( ElevationLayerVector::const_iterator i = elevationLayers().begin(); i != elevationLayers().end(); ++i )
+    for (LayerVector::const_iterator i = _layers.begin(); i != _layers.end(); ++i)
     {
-        const ElevationLayer* layer = i->get();
+        TerrainLayer* layer = dynamic_cast<TerrainLayer*>(i->get());
+        if (layer)
+        {
+            if (!layer->getEnabled())
+                continue;
 
-        if (!layer->getEnabled())
-            continue;
+            // If we're cache only we should be fast
+            if (layer->getCacheSettings()->cachePolicy()->isCacheOnly())
+                continue;
 
-        //If we're cache only we should be fast
-        if (layer->getCacheSettings()->cachePolicy()->isCacheOnly())
-            continue;
+            // no-cache? always slow
+            if (layer->getCacheSettings()->cachePolicy()->isCacheDisabled())
+                return false;
 
-        // no-cache? always high-latency.
-        if (layer->getCacheSettings()->cachePolicy()->isCacheDisabled())
-            return false;
+            //If no data is available on this tile, we'll be fast
+            if (!layer->mayHaveData(key))
+                continue;
 
-        osg::ref_ptr< TileSource > source = layer->getTileSource();
-        if (!source.valid())
-            continue;
+            // No tile source? skip it
+            osg::ref_ptr< TileSource > source = layer->getTileSource();
+            if (!source.valid())
+                continue;
 
-        //If the tile is blacklisted, it should also be fast.
-        if ( source->getBlacklist()->contains( key ) )
-            continue;
+            //If the tile is blacklisted, it should also be fast.
+            if (source->getBlacklist()->contains(key))
+                continue;
 
-        if ( !source->hasData( key ) )
-            continue;
-
-        if ( !i->get()->isCached( key ) )
-            return false;
+            if (!layer->isCached(key))
+                return false;
+        }
     }
-
     return true;
 }
 
 const MapOptions&
 MapFrame::getMapOptions() const
 {
-    return _map->getMapOptions();
+    static MapOptions defaultMapOptions;
+    osg::ref_ptr<const Map> map;
+    if (_map.lock(map))
+        return map->getMapOptions();
+    else
+        return defaultMapOptions;
 }

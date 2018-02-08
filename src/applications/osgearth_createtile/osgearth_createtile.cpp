@@ -56,7 +56,11 @@ struct CollectTriangles
     {
         verts = new osg::Vec3Array();
     }
+#if OSG_VERSION_LESS_THAN(3,5,6)
     inline void operator () (const osg::Vec3& v1,const osg::Vec3& v2,const osg::Vec3& v3, bool treatVertexDataAsTemporary)
+#else
+    inline void operator () (const osg::Vec3& v1,const osg::Vec3& v2,const osg::Vec3& v3)
+#endif
     {
         verts->push_back(v1);
         verts->push_back(v2);
@@ -209,7 +213,7 @@ struct CreateTileHandler : public osgGA::GUIEventHandler
 
                 // Clamp the marker to the intersection of the triangles created by osgEarth.  This should line up with the mesh that is actually rendered.
                 double z = 0.0;
-                s_mapNode->getTerrain()->getHeight( node, s_mapNode->getMapSRS(), mapPoint.x(), mapPoint.y(), &z);
+                s_mapNode->getTerrain()->getHeight( node.get(), s_mapNode->getMapSRS(), mapPoint.x(), mapPoint.y(), &z);
 
                 GeoTransform* xform = new GeoTransform();
                 xform->setPosition( osgEarth::GeoPoint(s_mapNode->getMapSRS(),mapPoint.x(),  mapPoint.y(), z, ALTMODE_ABSOLUTE) );

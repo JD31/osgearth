@@ -36,15 +36,10 @@
 #include <osg/ValueObject>
 #include <osg/Timer>
 
-#include <osgDB/WriteFile>
-
 #define LC "[ClampingTechnique] "
 
 //#define OE_TEST if (_dumpRequested) OE_INFO << std::setprecision(9)
 #define OE_TEST OE_NULL
-
-//#define USE_RENDER_BIN 1
-#undef USE_RENDER_BIN
 
 //#define DUMP_RTT_IMAGE 1
 //#undef DUMP_RTT_IMAGE
@@ -55,14 +50,9 @@ using namespace osgEarth;
 
 //---------------------------------------------------------------------------
 
+#ifdef TIME_RTT_CAMERA
 namespace
 {
-    osg::Group* s_providerImpl(MapNode* mapNode)
-    {
-        return mapNode ? mapNode->getOverlayDecorator()->getGroup<ClampingTechnique>() : 0L;
-    }
-
-#ifdef TIME_RTT_CAMERA
     static osg::Timer_t t0, t1;
     struct RttIn : public osg::Camera::DrawCallback {
         void operator()(osg::RenderInfo& r) const {
@@ -75,10 +65,8 @@ namespace
             OE_NOTICE << "RTT = " << osg::Timer::instance()->delta_m(t0, t1) << "ms" << std::endl;
         }
     };
-#endif
 }
-
-ClampingTechnique::TechniqueProvider ClampingTechnique::Provider = s_providerImpl;
+#endif
 
 //---------------------------------------------------------------------------
 
@@ -120,79 +108,6 @@ namespace
 #endif
 }
 
-#ifdef USE_RENDER_BIN
-
-//---------------------------------------------------------------------------
-// Custom bin for clamping.
-
-namespace
-{
-    struct ClampingRenderBin : public osgUtil::RenderBin
-    {
-        struct PerViewData // : public osg::Referenced
-        {
-            osg::observer_ptr<LocalPerViewData> _techData;
-        };
-
-        // shared across ALL render bin instances.
-        typedef Threading::PerObjectMap<osg::Camera*, PerViewData> PerViewDataMap;
-        PerViewDataMap* _pvd; 
-
-        // support cloning (from RenderBin):
-        virtual osg::Object* cloneType() const { return new ClampingRenderBin(); }
-        virtual osg::Object* clone(const osg::CopyOp& copyop) const { return new ClampingRenderBin(*this,copyop); } // note only implements a clone of type.
-        virtual bool isSameKindAs(const osg::Object* obj) const { return dynamic_cast<const ClampingRenderBin*>(obj)!=0L; }
-        virtual const char* libraryName() const { return "osgEarth"; }
-        virtual const char* className() const { return "ClampingRenderBin"; }
-
-
-        // constructs the prototype for this render bin.
-        ClampingRenderBin() : osgUtil::RenderBin()
-        {
-            this->setName( OSGEARTH_CLAMPING_BIN );
-            _pvd = new PerViewDataMap();
-        }
-
-        ClampingRenderBin( const ClampingRenderBin& rhs, const osg::CopyOp& op )
-            : osgUtil::RenderBin( rhs, op ), _pvd( rhs._pvd )
-        {
-            // zero out the stateset...dont' want to share that!
-            _stateset = 0L;
-        }
-
-        // override.
-        void sortImplementation()
-        {
-            copyLeavesFromStateGraphListToRenderLeafList();
-        }
-
-        // override.
-        void drawImplementation(osg::RenderInfo& renderInfo, osgUtil::RenderLeaf*& previous)
-        {
-            // find and initialize the state set for this camera.
-            if ( !_stateset.valid() )
-            {
-                osg::Camera* camera = renderInfo.getCurrentCamera();
-                PerViewData& data = _pvd->get(camera);
-                if ( data._techData.valid() )
-                {
-                    _stateset = data._techData->_groupStateSet.get();
-                    LocalPerViewData* local = static_cast<LocalPerViewData*>(data._techData.get());
-                    local->_renderLeafCount = _renderLeafList.size();
-                }
-            }
-
-            osgUtil::RenderBin::drawImplementation( renderInfo, previous );
-        }
-    };
-}
-
-/** the static registration. */
-extern "C" void osgEarth_clamping_bin_registration(void) {}
-static osgEarthRegisterRenderBinProxy<ClampingRenderBin> s_regbin(OSGEARTH_CLAMPING_BIN);
-
-#endif // USE_RENDER_BIN
-
 //---------------------------------------------------------------------------
 
 ClampingTechnique::ClampingTechnique() :
@@ -210,12 +125,7 @@ _engine(0L)
 bool
 ClampingTechnique::hasData(OverlayDecorator::TechRTTParams& params) const
 {
-#ifdef USE_RENDER_BIN
-    //TODO: reconsider
-    return true;
-#else
-    return params._group->getNumChildren() > 0;
-#endif
+    return getBound(params).valid();
 }
 
 
@@ -228,6 +138,8 @@ ClampingTechnique::reestablish(TerrainEngineNode* engine)
 void
 ClampingTechnique::setUpCamera(OverlayDecorator::TechRTTParams& params)
 {
+    OE_INFO << LC << "Using texture size = " << _textureSize.get() << std::endl;
+
     // To store technique-specific per-view info:
     LocalPerViewData* local = new LocalPerViewData();
     params._techniqueData = local;
@@ -246,8 +158,9 @@ ClampingTechnique::setUpCamera(OverlayDecorator::TechRTTParams& params)
     local->_rttTexture->setWrap( osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE );
     //local->_rttTexture->setBorderColor( osg::Vec4(0,0,0,1) );
 
-    // set up the RTT camera:
+    // set up the RTT camera for rendering a depth map of the terrain:
     params._rttCamera = new osg::Camera();
+    params._rttCamera->setName("GPU Clamping");
     params._rttCamera->setReferenceFrame( osg::Camera::ABSOLUTE_RF_INHERIT_VIEWPOINT );
     params._rttCamera->setClearDepth( 1.0 );
     params._rttCamera->setClearMask( GL_DEPTH_BUFFER_BIT );
@@ -311,6 +224,9 @@ ClampingTechnique::setUpCamera(OverlayDecorator::TechRTTParams& params)
         osg::StateAttribute::ON );
 
     local->_groupStateSet->setRenderingHint( osg::StateSet::TRANSPARENT_BIN );
+
+    // set a define so the shaders know we are running GPU clamping.
+    local->_groupStateSet->setDefine("OE_GPU_CLAMPING");
 
     // uniform for the horizon distance (== max clamping distance)
     local->_horizonDistance2Uniform = local->_groupStateSet->getOrCreateUniform(
@@ -376,29 +292,15 @@ ClampingTechnique::preCullTerrain(OverlayDecorator::TechRTTParams& params,
     if ( !params._rttCamera.valid() && hasData(params) )
     {
         setUpCamera( params );
-
-#ifdef USE_RENDER_BIN
-
-        // store our camera's stateset in the perview data.
-        ClampingRenderBin* bin = dynamic_cast<ClampingRenderBin*>( osgUtil::RenderBin::getRenderBinPrototype(OSGEARTH_CLAMPING_BIN) );
-        if ( bin )
-        {
-            ClampingRenderBin::PerViewData& data = bin->_pvd->get( cv->getCurrentCamera() );
-            LocalPerViewData* local = static_cast<LocalPerViewData*>(params._techniqueData.get());
-            data._techData = local;
-        }
-        else
-        {
-            OE_WARN << LC << "Odd, no prototype found for the clamping bin." << std::endl;
-        }
-
-#endif
     }
-
-#ifdef TIME_RTT_CAMERA
-#endif
 }
 
+       
+const osg::BoundingSphere&
+ClampingTechnique::getBound(OverlayDecorator::TechRTTParams& params) const
+{
+    return _clampingManager.get(params._mainCamera).getBound();
+}
 
 void
 ClampingTechnique::cullOverlayGroup(OverlayDecorator::TechRTTParams& params,
@@ -461,24 +363,21 @@ ClampingTechnique::cullOverlayGroup(OverlayDecorator::TechRTTParams& params,
         local._depthClipToCamViewUniform->set( depthClipToCameraView );
 #endif
 
-        if ( params._group->getNumChildren() > 0 )
-        {
-            // traverse the overlay nodes, applying the clamping shader.
-            cv->pushStateSet( local._groupStateSet.get() );
+        // traverse the overlay nodes, applying the clamping shader.
+        cv->pushStateSet(local._groupStateSet.get());
 
-            // Since the vertex shader is moving the verts to clamp them to the terrain,
-            // OSG will not be able to properly cull the geometry. (Specifically: OSG may
-            // cull geometry which is invisible when NOT clamped, but becomes visible after
-            // GPU clamping.) We work around that by using a Proxy cull visitor that will 
-            // use the RTT camera's matrixes for frustum culling (instead of the main camera's).
-            ProxyCullVisitor pcv( cv, params._rttProjMatrix, params._rttViewMatrix );
+        // Since the vertex shader is moving the verts to clamp them to the terrain,
+        // OSG will not be able to properly cull the geometry. (Specifically: OSG may
+        // cull geometry which is invisible when NOT clamped, but becomes visible after
+        // GPU clamping.) We work around that by using a Proxy cull visitor that will 
+        // use the RTT camera's matrixes for frustum culling (instead of the main camera's).
+        ProxyCullVisitor pcv(cv, params._rttProjMatrix, params._rttViewMatrix);
 
-            // cull the clampable geometry.
-            params._group->accept( pcv );
+        // cull the clampable geometry.
+        getClampingManager().get(cv->getCurrentCamera()).accept(pcv);
 
-            // done; pop the clamping shaders.
-            cv->popStateSet();
-        }
+        // done; pop the clamping shaders.
+        cv->popStateSet();
     }
 }
 
@@ -503,8 +402,6 @@ ClampingTechnique::onInstall( TerrainEngineNode* engine )
     {
         unsigned maxSize = Registry::capabilities().getMaxFastTextureSize();
         _textureSize.init( osg::minimum( 4096u, maxSize ) );
-
-        OE_INFO << LC << "Using texture size = " << *_textureSize << std::endl;
     }
 }
 

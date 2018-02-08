@@ -17,6 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 #include <osgEarth/ResourceReleaser>
+#include <osgEarth/Metrics>
 #include <osg/Version>
 
 using namespace osgEarth;
@@ -26,10 +27,8 @@ using namespace osgEarth;
 
 ResourceReleaser::ResourceReleaser()
 {
-#if OSG_VERSION_GREATER_OR_EQUAL(3,4,0)
     // ensure this node always gets traversed:
     this->setCullingActive(false);
-#endif
 
     // ensure the draw runs synchronously:
     this->setDataVariance(DYNAMIC);
@@ -62,10 +61,11 @@ ResourceReleaser::drawImplementation(osg::RenderInfo& ri) const
         Threading::ScopedMutexLock lock(_mutex);
         if (!_toRelease.empty())
         {
+            METRIC_SCOPED("ResourceReleaser");
             for (ObjectList::const_iterator i = _toRelease.begin(); i != _toRelease.end(); ++i)
             {
-                osg::Object* node = i->get();
-                node->releaseGLObjects(ri.getState());
+                osg::Object* object = i->get();
+                object->releaseGLObjects(ri.getState());
             }
             OE_DEBUG << LC << "Released " << _toRelease.size() << " objects\n";
             _toRelease.clear();

@@ -19,6 +19,7 @@
 #include <osgEarthFeatures/LabelSource>
 #include <osgEarthFeatures/FeatureSourceIndexNode>
 #include <osgEarthFeatures/GeometryUtils>
+#include <osgEarthFeatures/FilterContext>
 #include <osgEarthAnnotation/LabelNode>
 #include <osgEarthAnnotation/PlaceNode>
 #include <osgEarth/DepthOffset>
