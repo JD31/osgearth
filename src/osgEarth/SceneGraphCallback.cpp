@@ -20,8 +20,116 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>
 */
 #include <osgEarth/SceneGraphCallback>
+#include <osgEarth/CullingUtils>
+#include <osgUtil/CullVisitor>
 
 using namespace osgEarth;
+
+
+PagedLODwithVisibilityRange::PagedLODwithVisibilityRange() :
+_visibilityMaxRange( FLT_MAX ),
+_currentRange( FLT_MAX),
+_isVisible( true )
+{
+    //nop
+}
+
+void
+PagedLODwithVisibilityRange::setVisibilityMaxRange( float visibilityMaxRange )
+{
+    _visibilityMaxRange = visibilityMaxRange;
+
+    // dirty the camera range so as to force a new cull computation
+    _currentRange = FLT_MAX;
+}
+
+bool
+PagedLODwithVisibilityRange::addChild(osg::Node* child)
+{
+    bool ok = false;
+    if (child)
+    {
+        ok = osg::PagedLOD::addChild(child);
+        if (ok)
+        {
+            // dirty the camera range so as to force a new cull computation
+            _currentRange = FLT_MAX;
+        }
+    }
+    return ok;
+}
+
+bool
+PagedLODwithVisibilityRange::insertChild(unsigned index, osg::Node* child)
+{
+    bool ok = false;
+    if (child)
+    {
+        ok = osg::PagedLOD::insertChild(index, child);
+        if (ok)
+        {
+            // dirty the camera range so as to force a new cull computation
+            _currentRange = FLT_MAX;
+        }
+    }
+    return ok;
+}
+
+bool
+PagedLODwithVisibilityRange::replaceChild(osg::Node* oldChild, osg::Node* newChild)
+{
+    bool ok = false;
+    if (oldChild && newChild)
+    {
+        ok = osg::PagedLOD::replaceChild(oldChild, newChild);
+        if (ok)
+        {
+            // dirty the camera range so as to force a new cull computation
+            _currentRange = FLT_MAX;
+        }
+    }
+    return ok;
+}
+
+void
+PagedLODwithVisibilityRange::traverse(osg::NodeVisitor& nv)
+{
+    if ( _visibilityMaxRange != FLT_MAX
+            && nv.getVisitorType() == osg::NodeVisitor::CULL_VISITOR )
+    {
+        osgUtil::CullVisitor* cv = Culling::asCullVisitor(nv);
+        osg::Camera* camera = cv->getCurrentCamera();
+
+        // work only on reference camera
+        if( camera && ! camera->isRenderToTextureCamera() )
+        {
+            double alt;
+            if ( camera->getUserValue("range", alt) && _currentRange != alt )
+            {
+                _currentRange = alt;
+                if( _currentRange > _visibilityMaxRange )
+                {
+                    if( _isVisible && getNumChildren() > 0 )
+                    {
+                        getChild(0)->setNodeMask(0);
+                        _isVisible = false;
+                    }
+                }
+                else
+                {
+                    if( ! _isVisible && getNumChildren() > 0 )
+                    {
+                        getChild(0)->setNodeMask(~0);
+                        _isVisible = true;
+                    }
+                }
+            }
+        }
+    }
+
+    osg::PagedLOD::traverse(nv);
+}
+
 
 void
 SceneGraphCallbacks::add(SceneGraphCallback* cb)
@@ -97,10 +205,12 @@ PagedLODWithSceneGraphCallbacks::addChild(osg::Node* child)
     bool ok = false;
     if (child)
     {
-        ok = osg::PagedLOD::addChild(child);
+        ok = PagedLODwithVisibilityRange::addChild(child);
         osg::ref_ptr<SceneGraphCallbacks> host;
         if (_host.lock(host))
+        {
             host->firePostMergeNode(child);
+        }
     }
     return ok;
 }
@@ -111,10 +221,12 @@ PagedLODWithSceneGraphCallbacks::insertChild(unsigned index, osg::Node* child)
     bool ok = false;
     if (child)
     {
-        ok = osg::PagedLOD::insertChild(index, child);
+        ok = PagedLODwithVisibilityRange::insertChild(index, child);
         osg::ref_ptr<SceneGraphCallbacks> host;
         if (_host.lock(host))
+        {
             host->firePostMergeNode(child);
+        }
     }
     return ok;
 }
@@ -125,10 +237,12 @@ PagedLODWithSceneGraphCallbacks::replaceChild(osg::Node* oldChild, osg::Node* ne
     bool ok = false;
     if (oldChild && newChild)
     {
-        ok = osg::PagedLOD::replaceChild(oldChild, newChild);
+        ok = PagedLODwithVisibilityRange::replaceChild(oldChild, newChild);
         osg::ref_ptr<SceneGraphCallbacks> host;
         if (_host.lock(host))
+        {
             host->firePostMergeNode(newChild);
+        }
     }
     return ok;
 }
@@ -147,3 +261,5 @@ PagedLODWithSceneGraphCallbacks::removeChild(osg::Node* child)
     }
     return ok;
 }
+
+

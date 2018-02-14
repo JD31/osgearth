@@ -81,11 +81,39 @@ namespace osgEarth
     };
 
     /**
+     * Extends the osg::PagedLOD class to enable to tune the max visibility range
+     */
+    class OSGEARTH_EXPORT PagedLODwithVisibilityRange : public osg::PagedLOD
+    {
+    public:
+        PagedLODwithVisibilityRange();
+
+        /**
+         * Specify the max desired camera range for visibility
+         */
+        void setVisibilityMaxRange( float visibilityMaxRange ) ;
+
+    public: // osg::Group
+
+        virtual bool addChild(osg::Node* child);
+        virtual bool insertChild(unsigned index, osg::Node* child);
+        virtual bool replaceChild(osg::Node* origChild, osg::Node* newChild);
+
+        virtual void traverse(osg::NodeVisitor& nv);
+
+    private:
+
+        float _visibilityMaxRange;
+        float _currentRange;
+        bool  _isVisible;
+    };
+
+    /**
      * Extends the osg::PagedLOD class to invoke SceneGraphCallbacks
      * when nodes are added or removed from the live scene graph.
      * (Note, this object does not invoke the preMergeNode method.)
      */
-    class OSGEARTH_EXPORT PagedLODWithSceneGraphCallbacks : public osg::PagedLOD
+    class OSGEARTH_EXPORT PagedLODWithSceneGraphCallbacks : public PagedLODwithVisibilityRange
     {
     public:
         PagedLODWithSceneGraphCallbacks(SceneGraphCallbacks* host);
