@@ -87,7 +87,7 @@ namespace
         return str;
     }
 
-    PagedLODWithNodeOperations* createPagedNode(const osg::BoundingSphered& bs,
+    osg::Group* createPagedNode(const osg::BoundingSphered& bs,
                                 const std::string& uri, 
                                 float minRange, 
                                 float maxRange, 
@@ -125,7 +125,8 @@ namespace
         }
         else
         {
-            p = new osg::PagedLOD();
+            //p = new osg::PagedLOD();
+            p = new PagedLODwithVisibilityRange();
         }
 
         p->setCenter(bs.center());
@@ -874,7 +875,9 @@ FeatureModelGraph::buildSubTilePagedLODs(unsigned        parentLOD,
                         _defaultFileLocationCallback.get(),
                         readOptions,
                         this);
-                	childNode->setVisibilityMaxRange(flevel->maxVisibilityRange().get());
+                    PagedLODwithVisibilityRange* pagedChildNode = dynamic_cast<PagedLODwithVisibilityRange*>(childNode);
+                    if( pagedChildNode )
+                        pagedChildNode->setVisibilityMaxRange(flevel->maxVisibilityRange().get());
                 }
                 else
                 {
