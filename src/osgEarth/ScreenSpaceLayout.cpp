@@ -497,14 +497,14 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
             //cam->getView()->findSlaveIndexForCamera(cam) < cam->getView()->getNumSlaves())
         {
             osg::Camera* parentCam = cam->getView()->getCamera();
-            const osg::Viewport* refVP = parentCam->getViewport();
+            refVP = parentCam->getViewport();
             refCamScale.set( vp->width() / refVP->width(), vp->height() / refVP->height(), 1.0 );
             refCamScaleMat.makeScale( refCamScale );
             refWindowMatrix = refVP->computeWindowMatrix();
             parentCam->getViewMatrixAsLookAt(eye,center,up);
         }
-	else
-	{
+        else
+        {
             cam->getViewMatrixAsLookAt(eye,center,up);
         }
 

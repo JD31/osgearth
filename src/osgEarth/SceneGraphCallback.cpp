@@ -182,6 +182,7 @@ SceneGraphCallbacks::fireRemoveNode(osg::Node* node)
 
 
 PagedLODWithSceneGraphCallbacks::PagedLODWithSceneGraphCallbacks(SceneGraphCallbacks* host) :
+PagedLODwithVisibilityRange(),
 _host(host)
 {
     //nop

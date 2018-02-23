@@ -125,8 +125,8 @@ namespace
         }
         else
         {
-            //p = new osg::PagedLOD();
-            p = new PagedLODwithVisibilityRange();
+            p = new osg::PagedLOD();
+//            p = new PagedLODwithVisibilityRange();
         }
 
         p->setCenter(bs.center());
