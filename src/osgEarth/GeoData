@@ -532,6 +532,9 @@ namespace osgEarth
         osg::ref_ptr<const SpatialReference> _srs;
         double _west, _width, _south, _height;
 
+        // TODO Dirty patch that allows to manage an extend greater than 360
+        bool _largeWidthPatch;
+
         double normalizeX( double longitude ) const;
 
         void clamp();
