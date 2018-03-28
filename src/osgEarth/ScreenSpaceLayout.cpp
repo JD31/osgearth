@@ -69,7 +69,14 @@ namespace
             }
             else
             {
-                return ( lhs->_depth < rhs->_depth );
+                // first fallback on depth:
+                float diff = lhs->_depth - rhs->_depth;
+                if ( diff != 0.0f )
+                    return diff < 0.0f;
+
+                // then fallback on traversal order.
+                diff = float(lhs->_traversalNumber) - float(rhs->_traversalNumber);
+                return diff < 0.0f;
             }
         }
     };
