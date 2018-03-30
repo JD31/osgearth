@@ -1082,10 +1082,10 @@ FeatureModelGraph::buildTile(const FeatureLevel& level,
         }
 
         // cache it if appropriate.
-        if (_options.nodeCaching() == true)
-        {
+        //if (_options.nodeCaching() == true)
+        //{
             writeTileToCache(cacheKey, group.get(), readOptions);
-        }
+        //}
     }
 
     if ( group->getNumChildren() > 0 )
