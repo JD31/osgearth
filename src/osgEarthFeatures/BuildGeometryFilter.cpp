@@ -60,87 +60,6 @@ using namespace osgEarth;
 using namespace osgEarth::Features;
 using namespace osgEarth::Symbology;
 
-/**
- * @brief The AltitudeNodeCullCallback class will switch vertex colors depending on a given altitude
- */
-class AltitudeNodeCullCallback : public osg::NodeCallback {
-   private:
-    int _currentLevel;  // 1 for high, 0 for low
-    int _levelSwitchThreshold;
-    std::vector<Color*> _colors;
-
-    void switchLevel(int level, osg::Node* node) {
-        _currentLevel = level;
-        osg::Geode* geode = node->asGeode();
-
-        if (geode) {
-            for (unsigned int i = 0; i < geode->getNumDrawables(); i++) {
-                osg::Geometry* geom = geode->getDrawable(i)->asGeometry();
-                if (geom) {
-                    //                   *** Code not used because there is an unexplained memory consumption
-                    //                   when unzooming the map. UserDataArrays* vertexColors =
-                    //                   dynamic_cast<UserDataArrays*>(geom->getUserData()); if(vertexColors
-                    //                   == nullptr) {
-                    //                       OE_WARN << " AltitudeNodeCullCallback:: unable to find attached
-                    //                       vertex colors, skip geometry \n"; continue;
-                    //                   }
-                    //                   osg::ref_ptr<osg::Array> colours = (level==0) ? vertexColors->_data0
-                    //                   : vertexColors->_data1; geom->setColorArray(colours.get());
-                    //                   geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
-
-                    osg::Vec4Array* colourArray = (osg::Vec4Array*)geom->getColorArray();
-                    Color* colour = _colors[level];
-                    for (unsigned int j = 0; j < geom->getColorArray()->getNumElements(); j++) {
-                        // fill with level color data
-                        colourArray->at(j)[0] = colour->r();
-                        colourArray->at(j)[1] = colour->g();
-                        colourArray->at(j)[2] = colour->b();
-                        colourArray->at(j)[3] = colour->a();
-                    }
-                    colourArray->dirty();
-                }
-            }
-        }
-    }
-
-   public:
-    AltitudeNodeCullCallback(int altitude, Color colorHi, Color colorLow)
-        : _levelSwitchThreshold(altitude), _currentLevel(1), _colors(2) {
-        _colors[0] = new Color(colorLow);
-        _colors[1] = new Color(colorHi);
-    }
-
-    virtual ~AltitudeNodeCullCallback() {
-    }
-
-    virtual void operator()(osg::Node* node, osg::NodeVisitor* nv) {
-        osgUtil::CullVisitor* cv = Culling::asCullVisitor(nv);
-
-        if (cv) {
-            osg::Camera* camera = cv->getCurrentCamera();
-            if (camera && camera->isRenderToTextureCamera()) {
-                camera = dynamic_cast<osg::Camera*>(camera->getUserData());
-            }
-
-            if (camera && camera->getName().compare("osgEarth::RTTPicker") != 0) {
-                double range = 0.;
-                camera->getUserValue("range", range);
-
-                if (range < _levelSwitchThreshold && _currentLevel == 1) {
-                    // From high to low
-                    switchLevel(0, node);
-
-                } else if (range > _levelSwitchThreshold && _currentLevel == 0) {
-                    // From low to high
-                    switchLevel(1, node);
-                }
-            }
-        }
-
-        traverse(node, nv);
-    }
-};
-
 namespace
 {
     bool isCCW(double x1, double y1, double x2, double y2, double x3, double y3)
@@ -547,9 +466,6 @@ BuildGeometryFilter::processLines(FeatureList& features, FilterContext& context)
 {
     osg::Geode* geode = new osg::Geode();
 
-    // Optional culling Callback to modify vertex colors
-    AltitudeNodeCullCallback* altitudeNodeCullCallback = nullptr;
-
     bool makeECEF = false;
     const SpatialReference* featureSRS = 0L;
     const SpatialReference* outputSRS = 0L;
@@ -694,29 +610,6 @@ BuildGeometryFilter::processLines(FeatureList& features, FilterContext& context)
 
 #endif
 
-            // check if AltitudeNodeCullCallback should be created
-            if (line->stroke()->color2().isSet() && line->stroke()->color2criteriaBelowAlt().isSet()) {
-                //*** Code not used because there is an unexplained memory consumption when unzooming the map.
-                // UserDataArrays* vertexColors = new UserDataArrays(2);
-                // osgGeom->setUserData(vertexColors);
-
-                // precompute vertex colors for High and Low altitude state
-                // vertexColors->_data[1] = osg::ref_ptr<osg::Vec4Array>(colors);
-                // vertexColors->_data1 = osg::ref_ptr<osg::Vec4Array>(colors);
-                // osg::ref_ptr<osg::Vec4Array> coloursLow = new osg::Vec4Array();
-                // Color secondaryColor = line->stroke()->color2().get().color();
-                // coloursLow->assign( colors->getNumElements(), secondaryColor );
-                // vertexColors->_data[0] = coloursLow;
-                // vertexColors->_data0 = coloursLow;
-
-                if (altitudeNodeCullCallback == nullptr) {
-                    int altitudeCriteria = line->stroke()->color2criteriaBelowAlt().get();
-                    Color secondaryColor = line->stroke()->color2().get().color();
-                    altitudeNodeCullCallback =
-                        new AltitudeNodeCullCallback(altitudeCriteria, primaryColor, secondaryColor);
-                }
-            }
-
                 geode->addDrawable( osgGeom );
 
                 // record the geometry's primitive set(s) in the index:
@@ -732,11 +625,6 @@ BuildGeometryFilter::processLines(FeatureList& features, FilterContext& context)
                 }
             }
         }
-    }
-    
-    if (altitudeNodeCullCallback != nullptr)
-    {
-        geode->addCullCallback(altitudeNodeCullCallback);
     }
 
     if (_useGPULines == true)

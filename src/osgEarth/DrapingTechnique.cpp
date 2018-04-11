@@ -406,6 +406,7 @@ DrapingTechnique::setUpCamera(OverlayDecorator::TechRTTParams& params)
 
     // set up the RTT camera:
     params._rttCamera = new DrapingCamera(_drapingManager);
+    params._rttCamera->setUserData(params._mainCamera);
     params._rttCamera->setClearColor( osg::Vec4f(0,0,0,0) );
     // this ref frame causes the RTT to inherit its viewpoint from above (in order to properly
     // process PagedLOD's etc. -- it doesn't affect the perspective of the RTT camera though)
