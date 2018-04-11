@@ -89,7 +89,7 @@ namespace
                 }
                 else if (duk_is_boolean(ctx, -1))
                 {
-                    feature->set( key, duk_get_boolean(ctx, -1) );
+                    feature->set( key, duk_get_boolean(ctx, -1) > 0 );
                 }
                 else if( duk_is_null_or_undefined( ctx, -1 ) )
                 {
