@@ -28,7 +28,6 @@
 #include <osgUtil/LineSegmentIntersector>
 #include <osgViewer/View>
 #include <iomanip>
-#include <osgUtil/LineSegmentIntersector>
 
 #include <osg/io_utils>
 
@@ -938,13 +937,6 @@ EarthManipulator::getViewpoint() const
 }
 
 void
-EarthManipulator::breakTether()
-{
-    // breakTether() is deprecated; add new code to clearViewpoint
-    clearViewpoint();
-}
-
-void
 EarthManipulator::setViewpoint(const Viewpoint& vp, double duration_seconds)
 {
     // If the manip is not set up, save the viewpoint for later.
@@ -1045,7 +1037,7 @@ EarthManipulator::setViewpoint(const Viewpoint& vp, double duration_seconds)
             // calculate acceleration coefficients
             if ( _setVPArcHeight > 0.0 )
             {
-                // if we're arcing, we need seperate coefficients for the up and down stages
+                // if we're arcing, we need separate coefficients for the up and down stages
                 double h_apex = 2.0*(h0+h1) + _setVPArcHeight;
                 double dh2_up = fabs(h_apex - h0)/100000.0;
                 _setVPAccel = log10( dh2_up );
@@ -1260,13 +1252,6 @@ EarthManipulator::isSettingViewpoint() const
 }
 
 void
-EarthManipulator::cancelViewpointTransition()
-{
-    // @deprecated function - please add new code to clearViewpoint() instead
-    clearViewpoint();
-}
-
-void
 EarthManipulator::clearViewpoint()
 {
     bool breakingTether = isTethering();
@@ -1289,54 +1274,6 @@ EarthManipulator::isTethering() const
     // True if setViewpoint() was called and the viewpoint has a node.
     return _setVP1.isSet() && _setVP1->nodeIsSet();
 }
-
-void
-EarthManipulator::setTetherNode(osg::Node* node, double duration_s)
-{
-    // @deprecated function - please don't add new code here.
-    if ( node )
-    {
-        Viewpoint vp;
-        vp.setNode( node );
-        setViewpoint( vp, duration_s );
-    }
-
-    else
-    {
-        clearViewpoint();
-    }
-}
-
-void
-EarthManipulator::setTetherNode(osg::Node* node,
-                                double     duration_s,
-                                double     newHeadingDeg,
-                                double     newPitchDeg,
-                                double     newRangeM)
-{
-    // @deprecated function - please don't add new code here.
-    Viewpoint newVP;
-    newVP.setNode( node );
-    newVP.heading()->set( newHeadingDeg, Units::DEGREES );
-    newVP.pitch()->set( newPitchDeg, Units::DEGREES );
-    newVP.range()->set( newRangeM, Units::METERS );
-
-    setViewpoint( newVP, duration_s );
-
-    OE_WARN << LC << "TODO: call the tether callback\n";
-}
-
-osg::Node*
-EarthManipulator::getTetherNode() const
-{
-    if ( !isTethering() )
-        return 0L;
-
-    osg::ref_ptr<osg::Node> node;
-    _setVP1->getNode(node);
-    return node.release();
-}
-
 
 void EarthManipulator::collisionDetect()
 {

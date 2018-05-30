@@ -120,28 +120,6 @@ namespace
             traverse(node);
         }
 
-        void apply(osg::Geode& geode)
-        {
-            unsigned numDrawables = geode.getNumDrawables();
-            for( unsigned i=0; i<numDrawables; ++i )
-            {
-                osg::Drawable* d = geode.getDrawable(i);
-                if (d && d->getStateSet() )
-                {
-                    // ref for thread-safety; another thread might replace this stateset
-                    // during optimization while we're looking at it.
-                    osg::ref_ptr<osg::StateSet> stateset = d->getStateSet();
-                    if (stateset.valid() &&
-                        stateset->getDataVariance() != osg::Object::DYNAMIC)
-                    {
-                        applyStateSet( stateset.get() );
-                    }
-                }
-            }
-            apply((osg::Node&)geode);
-        }
-
-
         /**
          * @brief Insert all attributes of a stateSet in the shared cache and replace them.
          * @param stateSet The stateSet on which attributes are put in the cache.
@@ -171,7 +149,6 @@ namespace
             }
         }
     };
-
 
     /**
      * Visitor that calls StateSetCache::share on all statesets found
@@ -212,31 +189,6 @@ namespace
                 }
             }
             traverse(node);
-        }
-
-        void apply(osg::Geode& geode)
-        {
-            unsigned numDrawables = geode.getNumDrawables();
-            for( unsigned i=0; i<numDrawables; ++i )
-            {
-                osg::Drawable* d = geode.getDrawable(i);
-                if ( d && d->getStateSet())
-                {
-                    osg::ref_ptr<osg::StateSet> stateset = d->getStateSet();
-                    if (stateset.valid() && isEligible(stateset.get()))
-                    {
-                        _stateSets++;
-                        osg::ref_ptr<osg::StateSet> shared;
-                        if ( _cache->share(stateset, shared) )
-                        {
-                            d->setStateSet( shared.get() );
-                            _shares++;
-                        }
-                        //else _misses.push_back(in.get());
-                    }
-                }
-            }
-            apply((osg::Node&)geode);
         }
     };
 }

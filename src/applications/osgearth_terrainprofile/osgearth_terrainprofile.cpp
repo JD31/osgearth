@@ -154,10 +154,9 @@ public:
         if ( verts->getVertexBufferObject() )
             verts->getVertexBufferObject()->setUsage(GL_STATIC_DRAW_ARB);
 
-        osg::Vec4Array* colors = new osg::Vec4Array();
+        osg::Vec4Array* colors = new osg::Vec4Array(osg::Array::BIND_OVERALL);
         colors->push_back( _color );
         geom->setColorArray( colors );
-        geom->setColorBinding( osg::Geometry::BIND_OVERALL );
 
         double minElevation, maxElevation;
         _profile.getElevationRanges( minElevation, maxElevation );
@@ -217,10 +216,9 @@ public:
         if ( verts->getVertexBufferObject() )
             verts->getVertexBufferObject()->setUsage(GL_STATIC_DRAW_ARB);
 
-        osg::Vec4Array* colors = new osg::Vec4Array();
+        osg::Vec4Array* colors = new osg::Vec4Array(osg::Array::BIND_OVERALL);
         colors->push_back( backgroundColor );
         geometry->setColorArray( colors );
-        geometry->setColorBinding( osg::Geometry::BIND_OVERALL );
 
         geometry->addPrimitiveSet( new osg::DrawArrays( GL_QUADS, 0, 4 ) );
 
@@ -312,17 +310,18 @@ public:
           Style style;
           LineSymbol* ls = style.getOrCreateSymbol<LineSymbol>();
           ls->stroke()->color() = Color::Yellow;
-          ls->stroke()->width() = 2.0f;
-          ls->tessellation() = 20;
+          ls->stroke()->width() = 3.0f;
+          ls->tessellationSize()->set(100.0, Units::KILOMETERS);
 
-          style.getOrCreate<AltitudeSymbol>()->clamping() = AltitudeSymbol::CLAMP_TO_TERRAIN;
-          style.getOrCreate<AltitudeSymbol>()->technique() = AltitudeSymbol::TECHNIQUE_SCENE;
+          AltitudeSymbol* alt = style.getOrCreate<AltitudeSymbol>();
+          alt->clamping() = alt->CLAMP_TO_TERRAIN;
+          alt->technique() = alt->TECHNIQUE_DRAPE;
+
+          RenderSymbol* render = style.getOrCreate<RenderSymbol>();
+          render->lighting() = false;
 
           feature->style() = style;
-
           _featureNode = new FeatureNode( _mapNode, feature );
-          //Disable lighting
-          _featureNode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
           _root->addChild( _featureNode.get() );
 
       }
@@ -391,7 +390,7 @@ main(int argc, char** argv)
 
     viewer.getCamera()->addCullCallback( new AutoClipPlaneCullCallback(mapNode));
 
-    viewer.addEventHandler( new DrawProfileEventHandler( mapNode, root, calculator.get() ) );
+    viewer.addEventHandler( new DrawProfileEventHandler( mapNode, mapNode, calculator.get() ) );
 
     viewer.setSceneData( root );    
 

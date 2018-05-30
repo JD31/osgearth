@@ -117,7 +117,7 @@ namespace osgEarth
         /** dtor */
         virtual ~PrimitiveSetTypeCounter() { }
 
-        void apply(class osg::Geode&);
+        void apply(class osg::Drawable&);
 
         unsigned _point;
         unsigned _line;

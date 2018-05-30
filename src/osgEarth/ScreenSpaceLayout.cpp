@@ -58,20 +58,30 @@ struct SortContainer {
 
 // Custom sorting functor that sorts drawables front-to-back, and when drawables share the
 // same parent Geode, sorts them in traversal order.
-struct SortFrontToBackPreservingGeodeTraversalOrder {
-    bool operator()(const osgUtil::RenderLeaf* lhs, const osgUtil::RenderLeaf* rhs) const {
+struct SortFrontToBackPreservingGeodeTraversalOrder
+{
+    bool operator()(const osgUtil::RenderLeaf* lhs, const osgUtil::RenderLeaf* rhs) const
+    {
         const osg::Node* lhsParentNode = lhs->getDrawable()->getParent(0);
-        if (lhsParentNode == rhs->getDrawable()->getParent(0)) {
+        if (lhsParentNode == rhs->getDrawable()->getParent(0))
+        {
             const osg::Geode* geode = static_cast<const osg::Geode*>(lhsParentNode);
             return geode->getDrawableIndex(lhs->getDrawable()) > geode->getDrawableIndex(rhs->getDrawable());
-        } else {
+        }
+        else
+        {
             // first fallback on depth:
             float diff = lhs->_depth - rhs->_depth;
             if (diff != 0.0f)
                 return diff < 0.0f;
 
             // then fallback on traversal order.
+#if OSG_VERSION_GREATER_THAN(3,6,0)
+            diff = float(lhs->_traversalOrderNumber) - float(rhs->_traversalOrderNumber);
+#else
             diff = float(lhs->_traversalNumber) - float(rhs->_traversalNumber);
+#endif
+
             return diff < 0.0f;
         }
     }
@@ -79,49 +89,58 @@ struct SortFrontToBackPreservingGeodeTraversalOrder {
 
 // Custom sorting functor that sorts drawables by Priority, and when drawables share the
 // same parent Geode, sorts them in traversal order.
-struct SortByPriorityPreservingGeodeTraversalOrder : public DeclutterSortFunctor {
-    bool operator()(const osgUtil::RenderLeaf* lhs, const osgUtil::RenderLeaf* rhs) const {
+struct SortByPriorityPreservingGeodeTraversalOrder : public DeclutterSortFunctor
+{
+    bool operator()( const osgUtil::RenderLeaf* lhs, const osgUtil::RenderLeaf* rhs ) const
+    {
         const osg::Node* lhsParentNode = lhs->getDrawable()->getParent(0);
-        if (lhsParentNode == rhs->getDrawable()->getParent(0)) {
+        if ( lhsParentNode == rhs->getDrawable()->getParent(0) )
+        {
             const osg::Geode* geode = static_cast<const osg::Geode*>(lhsParentNode);
             return geode->getDrawableIndex(lhs->getDrawable()) > geode->getDrawableIndex(rhs->getDrawable());
         }
 
-        else {
-            const ScreenSpaceLayoutData* lhsdata =
-                dynamic_cast<const ScreenSpaceLayoutData*>(lhs->getDrawable()->getUserData());
+        else
+        {
+            const ScreenSpaceLayoutData* lhsdata = dynamic_cast<const ScreenSpaceLayoutData*>(lhs->getDrawable()->getUserData());
             float lhsPriority = lhsdata ? lhsdata->_priority : 0.0f;
 
-            const ScreenSpaceLayoutData* rhsdata =
-                dynamic_cast<const ScreenSpaceLayoutData*>(rhs->getDrawable()->getUserData());
+            const ScreenSpaceLayoutData* rhsdata = dynamic_cast<const ScreenSpaceLayoutData*>(rhs->getDrawable()->getUserData());
             float rhsPriority = rhsdata ? rhsdata->_priority : 0.0f;
 
             float diff = lhsPriority - rhsPriority;
 
-            if (diff != 0.0f)
+            if ( diff != 0.0f )
                 return diff > 0.0f;
 
             // first fallback on depth:
             diff = lhs->_depth - rhs->_depth;
-            if (diff != 0.0f)
+            if ( diff != 0.0f )
                 return diff < 0.0f;
 
             // then fallback on traversal order.
+#if OSG_VERSION_GREATER_THAN(3,6,0)
+            diff = float(lhs->_traversalOrderNumber) - float(rhs->_traversalOrderNumber);
+#else
             diff = float(lhs->_traversalNumber) - float(rhs->_traversalNumber);
+#endif
             return diff < 0.0f;
         }
     }
 };
 
 // Data structure shared across entire layout system.
-struct ScreenSpaceLayoutContext : public osg::Referenced {
+struct ScreenSpaceLayoutContext : public osg::Referenced
+{
     ScreenSpaceLayoutOptions _options;
 };
 
 // records information about each drawable.
 // TODO: a way to clear out this list when drawables go away
-struct DrawableInfo {
-    DrawableInfo() : _lastAlpha(1.0f), _lastScale(1.0f), _frame(0u) {
+struct DrawableInfo
+{
+    DrawableInfo() : _lastAlpha(1.0f), _lastScale(1.0f), _frame(0u)
+    {
     }
     float _lastAlpha, _lastScale;
     unsigned _frame;
@@ -132,8 +151,10 @@ typedef std::map<const osg::Drawable*, DrawableInfo> DrawableMemory;
 typedef std::pair<const osg::Node*, osg::BoundingBox> RenderLeafBox;
 
 // Data structure stored one-per-View.
-struct PerCamInfo {
-    PerCamInfo() : _lastTimeStamp(0), _firstFrame(true) {
+struct PerCamInfo
+{
+    PerCamInfo() : _lastTimeStamp(0), _firstFrame(true)
+    {
     }
 
     // remembers the state of each drawable from the previous pass

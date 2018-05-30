@@ -227,8 +227,8 @@ FeaturesToNodeFilter::computeLocalizers( const FilterContext& context, const osg
             {
                 osg::Vec3d centroid, centroidECEF;
                 geodExtent.getCentroid( centroid.x(), centroid.y() );
-                geogSRS->transform( centroid, geogSRS->getECEF(), centroidECEF );
-                geogSRS->getECEF()->createLocalToWorld( centroidECEF, out_l2w );
+                geogSRS->transform( centroid, geogSRS->getGeocentricSRS(), centroidECEF );
+                geogSRS->getGeocentricSRS()->createLocalToWorld( centroidECEF, out_l2w );
                 out_w2l.invert( out_l2w );
             }
         }
@@ -402,45 +402,6 @@ FeaturesToNodeFilter::createDelocalizeGroup( const osg::Matrixd &local2world ) c
     return group;
 }
 
-
-void 
-FeaturesToNodeFilter::applyLineSymbology(osg::StateSet*    stateset, 
-                                         const LineSymbol* line)
-{
-    if ( line && line->stroke().isSet() )
-    {
-        if ( line->stroke()->width().isSet() )
-        {
-            float width = std::max( 1.0f, *line->stroke()->width() );
-            if ( width != 1.0f )
-            {
-                stateset->setAttributeAndModes(new osg::LineWidth(width), 1);
-            }
-        }
-
-        if ( line->stroke()->stipplePattern().isSet() )
-        {
-            stateset->setAttributeAndModes(
-                new osg::LineStipple(
-                    line->stroke()->stippleFactor().value(),
-                    line->stroke()->stipplePattern().value()),
-                osg::StateAttribute::ON );
-
-#ifdef __IOS__
-
-            osg::Shader* dashedLineVertexObject = new osg::Shader( osg::Shader::VERTEX, std::string(dashedLineVertex));
-            osg::Shader* dashedLineFragmentObject = new osg::Shader( osg::Shader::FRAGMENT, std::string(dashedLineFragment));
-
-            osg::Program* dashedLineProgramObject = new osg::Program;
-
-            dashedLineProgramObject->addShader( dashedLineFragmentObject );
-            dashedLineProgramObject->addShader( dashedLineVertexObject );
-
-            stateset->setAttributeAndModes(dashedLineProgramObject, osg::StateAttribute::ON);
-#endif
-        }
-    }
-}
 
 void 
 FeaturesToNodeFilter::applyPointSymbology(osg::StateSet*     stateset, 
