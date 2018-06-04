@@ -408,7 +408,7 @@ BuildGeometryFilter::processPolygonizedLines(FeatureList&   features,
                 if (gpuClamping)
                 {
                     hats = new osg::FloatArray();
-                    hats->reserve( part->size() );
+                    hats->reserve( currentPart->size() );
                     for(Geometry::const_iterator i = currentPart->begin(); i != currentPart->end(); ++i )
                         hats->push_back( i->z() );
                 }

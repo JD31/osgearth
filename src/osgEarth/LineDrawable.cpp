@@ -54,7 +54,7 @@ using namespace osgEarth;
 #define LC "[LineGroup] "
 
 // Comment this out to test the non-GLSL path
-#define USE_GPU
+//#define USE_GPU
 
 namespace osgEarth { namespace Serializers { namespace LineGroup
 {
