@@ -1004,6 +1004,15 @@ struct DeclutterDraw : public osgUtil::RenderBin::DrawCallback {
         for (osgUtil::RenderBin::RenderLeafList::reverse_iterator rlitr = leaves.rbegin();
              rlitr != leaves.rend(); ++rlitr) {
             osgUtil::RenderLeaf* rl = *rlitr;
+
+            osg::ref_ptr<osgEarth::Annotation::BboxDrawable> bboxDraw = dynamic_cast<osgEarth::Annotation::BboxDrawable*>(rl->_drawable.get());
+            osg::ref_ptr<osgText::Text> textDraw = dynamic_cast<osgText::Text*>(rl->_drawable.get());
+            if(bboxDraw.get())
+                OE_DEBUG << "DRAW A BBOX\n";
+            if(textDraw.get())
+                OE_DEBUG << "DRAW A TEXT \"" << textDraw.get()->getText().createUTF8EncodedString() << " \"\n";
+
+
             renderLeaf(rl, renderInfo, previous);
             previous = rl;
         }
