@@ -70,7 +70,11 @@ namespace osgEarth
         //! Sets the overall color of the line
         void setColor(const osg::Vec4& color);
         const osg::Vec4& getColor() const { return _color; }
-        
+
+        //! Sets the overall color of the line
+        void setColorBinding(osg::Array::Binding colorBinding);
+        const osg::Array::Binding& getColorBinding() const { return _colorBinding; }
+
         //! Append a vertex to the line
         void pushVertex(const osg::Vec3& vert);
 
@@ -172,6 +176,7 @@ namespace osgEarth
         osg::Vec3Array* _previous;
         osg::Vec3Array* _next;
         osg::Vec4Array* _colors;
+        osg::Array::Binding _colorBinding;
 
         void initialize();
         void setupShaders();

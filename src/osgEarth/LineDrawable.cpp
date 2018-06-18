@@ -348,7 +348,8 @@ _first(0u),
 _count(0u),
 _current(NULL),
 _previous(NULL),
-_next(NULL)
+_next(NULL),
+_colorBinding(osg::Array::Binding::BIND_PER_VERTEX)
 {
 #ifdef USE_GPU
     _gpu = Registry::capabilities().supportsGLSL();
@@ -368,7 +369,8 @@ _first(0u),
 _count(0u),
 _current(NULL),
 _previous(NULL),
-_next(NULL)
+_next(NULL),
+_colorBinding(osg::Array::Binding::BIND_PER_VERTEX)
 {
 #ifdef USE_GPU
     _gpu = 
@@ -388,7 +390,8 @@ _factor(rhs._factor),
 _pattern(rhs._pattern),
 _width(rhs._width),
 _first(rhs._first),
-_count(rhs._count)
+_count(rhs._count),
+_colorBinding(rhs._colorBinding)
 {
     _current = static_cast<osg::Vec3Array*>(getVertexArray());
 
@@ -431,7 +434,7 @@ LineDrawable::initialize()
         setVertexArray(_current);
 
         _colors = new osg::Vec4Array();
-        _colors->setBinding(osg::Array::BIND_PER_VERTEX);
+        _colors->setBinding(_colorBinding);
         setColorArray(_colors);
 
         if (_gpu)
@@ -505,6 +508,24 @@ LineDrawable::setColor(const osg::Vec4& color)
         if (_colors && !_colors->empty())
         {
             _colors->assign(_colors->size(), _color);
+            _colors->dirty();
+        }
+    }
+}
+
+void
+LineDrawable::setColorBinding(osg::Array::Binding colorBinding)
+{
+    if (_colorBinding != colorBinding)
+    {
+        initialize();
+
+        _colorBinding = colorBinding;
+        if (_colors && !_colors->empty())
+        {
+            _colors->setBinding(_colorBinding);
+            _colors->assign(colorBinding == osg::Array::Binding::BIND_OVERALL ? 1 : _current->size(),
+                            _color);
             _colors->dirty();
         }
     }
@@ -635,10 +656,18 @@ LineDrawable::pushVertex(const osg::Vec3& vert)
             _next->push_back(vert);
             _next->push_back(vert);
 
-            _colors->push_back(_color);
-            _colors->push_back(_color);
-            _colors->push_back(_color);
-            _colors->push_back(_color);
+            if ( _colorBinding == osg::Array::Binding::BIND_OVERALL )
+            {
+                if( first )
+                    _colors->push_back(_color);
+            }
+            else
+            {
+                _colors->push_back(_color);
+                _colors->push_back(_color);
+                _colors->push_back(_color);
+                _colors->push_back(_color);
+            }
         }
 
         else if (_mode == GL_LINE_LOOP)
@@ -673,10 +702,18 @@ LineDrawable::pushVertex(const osg::Vec3& vert)
             _next->push_back(_current->front());
             _next->push_back(_current->front());
 
-            _colors->push_back(_color);
-            _colors->push_back(_color);
-            _colors->push_back(_color);
-            _colors->push_back(_color);
+            if ( _colorBinding == osg::Array::Binding::BIND_OVERALL )
+            {
+                if( first )
+                    _colors->push_back(_color);
+            }
+            else
+            {
+                _colors->push_back(_color);
+                _colors->push_back(_color);
+                _colors->push_back(_color);
+                _colors->push_back(_color);
+            }
         }
 
         else if (_mode == GL_LINES)
@@ -706,8 +743,16 @@ LineDrawable::pushVertex(const osg::Vec3& vert)
             _current->push_back(vert);
             _current->push_back(vert);
 
-            _colors->push_back(_color);
-            _colors->push_back(_color);
+            if ( _colorBinding == osg::Array::Binding::BIND_OVERALL )
+            {
+                if( first )
+                    _colors->push_back(_color);
+            }
+            else
+            {
+                _colors->push_back(_color);
+                _colors->push_back(_color);
+            }
         }
 
         _previous->dirty();
