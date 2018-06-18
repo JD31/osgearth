@@ -35,7 +35,7 @@ using namespace osgEarth::Annotation;
 //------------------------------------------------------------------------
 
 BboxDrawable::BboxDrawable( const osg::BoundingBox& box, const BBoxSymbol &bboxSymbol ) :
-osg::Geometry()
+    osg::Geometry()
 {
     setUseVertexBufferObjects(true);
 
@@ -69,7 +69,7 @@ osg::Geometry()
         {
             dump = v->at(iterator);
             v->push_back(osg::Vec3(2*center.x()-dump.x()-(box.xMax()-box.xMin()), dump.y(), dump.z()));
-    }
+        }
     }
 
     else
@@ -87,10 +87,10 @@ osg::Geometry()
                 shiftRight = shiftRight/2.0; // 22.5 angle instead of 45
         }
 
-        v->push_back( osg::Vec3(box.xMax()+margin+shiftRight, box.yMax()+margin, 0) );
-    v->push_back( osg::Vec3(box.xMin()-margin, box.yMax()+margin, 0) );
-    v->push_back( osg::Vec3(box.xMin()-margin, box.yMin()-margin, 0) );
         v->push_back( osg::Vec3(box.xMax()+margin+shiftRight, box.yMin()-margin, 0) );
+        v->push_back( osg::Vec3(box.xMin()-margin, box.yMin()-margin, 0) );
+        v->push_back( osg::Vec3(box.xMin()-margin, box.yMax()+margin, 0) );
+        v->push_back( osg::Vec3(box.xMax()+margin+shiftRight, box.yMax()+margin, 0) );
     }
 
     setVertexArray(v);
@@ -103,12 +103,37 @@ osg::Geometry()
     {
         c->push_back( bboxSymbol.fill()->color() );
         osg::DrawElements* de = new osg::DrawElementsUByte(GL_TRIANGLE_STRIP);
-        de->addElement(0);
-        de->addElement(1);
-        de->addElement(3);
-        de->addElement(2);
+        if ( v->size() == 4 )
+        {
+            de->addElement(0);
+            de->addElement(1);
+            de->addElement(3);
+            de->addElement(2);
+        }
+        else
+        {
+//            de->addElement(1);
+//            de->addElement(2);
+//            de->addElement(0);
+//            de->addElement(3);
+//            de->addElement(4);
+            de->addElement(0);
+            int prevIndex = 0;
+            int nextIndex = v->size() - 1;
+            bool up = true;
+            int step = 0;
+            while ( abs(nextIndex - prevIndex) >= 1)
+            {
+                de->addElement(nextIndex);
+                prevIndex = nextIndex;
+                up = !up;
+                if( ! up )
+                    step += 1;
+                nextIndex = up ? v->size() - 1 - step : step;
+            }
+        }
         addPrimitiveSet(de);
-        //addPrimitiveSet( new osg::DrawArrays(GL_POLYGON, 0, v->getNumElements()) );
+//        addPrimitiveSet( new osg::DrawArrays(GL_POLYGON, 0, v->getNumElements()) );
     }
 
     if ( bboxSymbol.border().isSet() )
