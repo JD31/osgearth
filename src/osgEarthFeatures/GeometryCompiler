@@ -26,11 +26,13 @@
 #include <osgEarthSymbology/Style>
 #include <osgEarth/GeoMath>
 #include <osgEarth/ShaderUtils>
+#include <osg/Geometry>
 
 namespace osgEarth { namespace Features
 {
     using namespace osgEarth;
     using namespace osgEarth::Symbology;
+
 
     class OSGEARTHFEATURES_EXPORT GeometryCompilerOptions
     {
@@ -111,6 +113,10 @@ namespace osgEarth { namespace Features
         /** Whether to use GPU-generated geometry for screen-space (pixel) width lines (default=false) */
         optional<bool>& useGPUScreenSpaceLines() { return _useGPULines; }
         const optional<bool>& useGPUScreenSpaceLines() const { return _useGPULines; }
+        
+        /** vertex color binding */
+        optional<osg::Geometry::AttributeBinding>& colorBinding() { return _colorBinding; }
+        const optional<osg::Geometry::AttributeBinding>& colorBinding() const { return _colorBinding; }
 
     public:
         Config getConfig() const;
@@ -135,6 +141,7 @@ namespace osgEarth { namespace Features
         optional<bool>                 _validate;
         optional<float>                _maxPolyTilingAngle;
         optional<bool>                 _useGPULines;
+        optional<osg::Geometry::AttributeBinding>     _colorBinding;
 
 
         static GeometryCompilerOptions s_defaults;

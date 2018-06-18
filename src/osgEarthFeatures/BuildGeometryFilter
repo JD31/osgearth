@@ -26,11 +26,13 @@
 #include <osgEarthSymbology/Style>
 #include <osgEarth/GeoMath>
 #include <osg/Geode>
+#include <osg/Geometry>
 
 namespace osgEarth { namespace Features 
 {
     using namespace osgEarth;
     using namespace osgEarth::Symbology;
+
 
     /**
      * Builds geometry from a stream of input features.
@@ -101,10 +103,16 @@ namespace osgEarth { namespace Features
          */
         optional<ShaderPolicy>& shaderPolicy() { return _shaderPolicy; }
         const optional<ShaderPolicy>& shaderPolicy() const { return _shaderPolicy; }
-
+        /**
+         * 
+         */
+        optional<osg::Geometry::AttributeBinding>& colorBinding() {return _colorBinding;}
+        const optional<osg::Geometry::AttributeBinding>& colorBinding() const { return _colorBinding; }
+        
+        
     protected:
         Style                      _style;
-
+        
         optional<double>           _maxAngle_deg;
         optional<GeoInterpolation> _geoInterp;
         optional<StringExpression> _featureNameExpr;
@@ -112,6 +120,7 @@ namespace osgEarth { namespace Features
         optional<bool>             _optimizeVertexOrdering;
         optional<Angle>            _maximumCreaseAngle;
         optional<ShaderPolicy>     _shaderPolicy;
+        optional<osg::Geometry::AttributeBinding> _colorBinding;
         
         void tileAndBuildPolygon(
             Geometry*               input,
