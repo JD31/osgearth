@@ -349,6 +349,7 @@ _count(0u),
 _current(NULL),
 _previous(NULL),
 _next(NULL),
+_colors(NULL),
 _colorBinding(osg::Array::Binding::BIND_PER_VERTEX)
 {
 #ifdef USE_GPU
@@ -370,6 +371,7 @@ _count(0u),
 _current(NULL),
 _previous(NULL),
 _next(NULL),
+_colors(NULL),
 _colorBinding(osg::Array::Binding::BIND_PER_VERTEX)
 {
 #ifdef USE_GPU
@@ -391,6 +393,10 @@ _pattern(rhs._pattern),
 _width(rhs._width),
 _first(rhs._first),
 _count(rhs._count),
+_current(NULL),
+_previous(NULL),
+_next(NULL),
+_colors(NULL),
 _colorBinding(rhs._colorBinding)
 {
     _current = static_cast<osg::Vec3Array*>(getVertexArray());
