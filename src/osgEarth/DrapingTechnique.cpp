@@ -20,19 +20,13 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>
 */
 #include <osgEarth/DrapingTechnique>
-#include <osgEarth/DrapingCullSet>
 #include <osgEarth/Capabilities>
 #include <osgEarth/Registry>
-#include <osgEarth/ShaderFactory>
-#include <osgEarth/VirtualProgram>
 #include <osgEarth/Shaders>
-#include <osgEarth/CullingUtils>
 #include <osgEarth/Lighting>
 
 #include <osg/BlendFunc>
-#include <osg/TexGen>
 #include <osg/Texture2D>
-#include <osg/Uniform>
 
 #define LC "[DrapingTechnique] "
 
@@ -394,7 +388,7 @@ DrapingTechnique::setUpCamera(OverlayDecorator::TechRTTParams& params)
 #else
     projTexture->setTextureSize( *_textureSize, *_textureSize );
 #endif
-    projTexture->setInternalFormat( GL_RGBA );
+    projTexture->setInternalFormat( GL_RGBA8 );  //use GL_RGBA8 for compatibility with osg's glTexStorage extension
     projTexture->setSourceFormat( GL_RGBA );
     projTexture->setSourceType( GL_UNSIGNED_BYTE );
     projTexture->setFilter( osg::Texture::MIN_FILTER, _mipmapping? osg::Texture::LINEAR_MIPMAP_LINEAR: osg::Texture::LINEAR );

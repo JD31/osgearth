@@ -18,27 +18,15 @@
  */
 #include <osgEarthUtil/Controls>
 #include <osgEarth/NodeUtils>
-#include <osg/Geometry>
-#include <osg/NodeCallback>
 #include <osg/Depth>
-#include <osg/TextureRectangle>
-#include <osgGA/GUIEventHandler>
-#include <osgText/Text>
-#include <osgUtil/RenderBin>
-#include <osgUtil/Statistics>
-#include <osgEarthSymbology/Style>
-#include <osgEarthSymbology/Geometry>
 #include <osgEarthSymbology/GeometryRasterizer>
 #include <osgEarthFeatures/PolygonizeLines>
-#include <osg/Version>
-#include <osgEarth/Common>
 #include <osgEarth/Registry>
-#include <osgEarth/Capabilities>
 #include <osgEarth/Utils>
 #include <osgEarth/CullingUtils>
-#include <osgEarth/ShaderGenerator>
 #include <osgEarth/GLUtils>
 #include <osgEarth/Shaders>
+#include <osgEarth/Text>
 
 using namespace osgEarth;
 using namespace osgEarth::Features;
@@ -109,27 +97,6 @@ namespace
             ss = new osg::StateSet();
             VirtualProgram* vp = VirtualProgram::getOrCreate(ss.get());
             vp->setInheritShaders(false);
-        }
-        return ss.get();
-    }
-
-    osg::StateSet* textStateSet()
-    {
-        static osg::ref_ptr<osg::StateSet> ss;
-        if (!ss.valid())
-        {
-            ss = new osg::StateSet();
-#if OSG_MIN_VERSION_REQUIRED(3,5,0)
-            // Load the SDF-compatible text shader program
-            VirtualProgram* vp = VirtualProgram::getOrCreate(ss.get());
-            vp->setInheritShaders(false);
-            osgEarth::Shaders shaders;
-            shaders.load(vp, shaders.TextVertex);
-            shaders.load(vp, shaders.TextFragment);
-#else
-            // Fall back on no program
-            ss->setAttributeAndModes(new osg::Program, 0);
-#endif
         }
         return ss.get();
     }
@@ -770,11 +737,10 @@ Control::handle( const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& aa, 
 namespace
 {
     // override osg Text to get at some of the internal properties
-    struct LabelText : public osgText::Text
+    struct LabelText : public osgEarth::Text
     {
-        LabelText() : osgText::Text()
+        LabelText() : osgEarth::Text()
         { 
-            setStateSet(textStateSet());
             setDataVariance(osg::Object::DYNAMIC); 
         }
         const osg::BoundingBox& getTextBB() const { return _textBB; }
@@ -823,7 +789,7 @@ _backdropType( osgText::Text::OUTLINE ),
 _backdropImpl( osgText::Text::NO_DEPTH_BUFFER ),
 _backdropOffset( 0.03f )
 { 
-    setStateSet(textStateSet());
+    //setStateSet(textStateSet());
     setFont( Registry::instance()->getDefaultFont() );    
     setForeColor( foreColor );
     setBackColor( osg::Vec4f(0,0,0,0) );
@@ -968,9 +934,7 @@ LabelControl::calcSize(const ControlContext& cx, osg::Vec2f& out_size)
         t->setAlignment( osgText::Text::LEFT_TOP ); 
         t->setColor( foreColor().value() );
 
-        // set up the font. When you do this, OSG automatically tries to put the text object
-        // in the transparent render bin. We do not want that, so we will set it back to
-        // INHERIT.
+        // set up the font.
         if ( _font.valid() )
             t->setFont( _font.get() );
 
@@ -1465,12 +1429,13 @@ CheckBoxControl::fireValueChanged( ControlEventHandler* oneHandler )
 }
 
 void
-CheckBoxControl::setValue( bool value )
+CheckBoxControl::setValue( bool value, bool notify )
 {
     if ( value != _value )
     {
         _value = value;
-        fireValueChanged();
+        if (notify)
+            fireValueChanged();
         dirty();
     }
 }
@@ -2885,8 +2850,8 @@ ControlCanvas::handle(const osgGA::GUIEventAdapter& ea,
 
     for( unsigned i=getNumChildren()-1; i>0; --i )
     {
-        Control* control = static_cast<Control*>( getChild(i) );
-        if ( control->isDirty() )
+        Control* control = dynamic_cast<Control*>( getChild(i) );
+        if ( control && control->isDirty() )
         {
             aa.requestRedraw();
             break;
@@ -2900,8 +2865,9 @@ ControlCanvas::handle(const osgGA::GUIEventAdapter& ea,
     {
         for( unsigned i=1; i<getNumChildren(); ++i )
         {
-            Control* control = static_cast<Control*>( getChild(i) );
-            control->handle(ea, aa, _context);
+            Control* control = dynamic_cast<Control*>( getChild(i) );
+            if (control)
+                control->handle(ea, aa, _context);
         }
         return handled;
     }
@@ -2912,8 +2878,8 @@ ControlCanvas::handle(const osgGA::GUIEventAdapter& ea,
 
     for( unsigned i=getNumChildren()-1; i>0; --i )
     {
-        Control* control = static_cast<Control*>( getChild(i) );
-        if ( control->intersects( canvasX, canvasY ) )
+        Control* control = dynamic_cast<Control*>( getChild(i) );
+        if ( control && control->intersects( canvasX, canvasY ) )
         {
             handled = control->handle( ea, aa, _context );
             if ( handled )
@@ -2949,9 +2915,8 @@ ControlCanvas::update(const osg::FrameStamp* frameStamp)
     int bin = 0;
     for( unsigned i=1; i<getNumChildren(); ++i )
     {
-        Control* control = static_cast<Control*>( getChild(i) );
-
-        if ( control->isDirty() || _contextDirty )
+        Control* control = dynamic_cast<Control*>( getChild(i) );
+        if ( control && (control->isDirty() || _contextDirty))
         {
             osg::Vec2f size;
             control->calcSize( _context, size );
@@ -2986,8 +2951,8 @@ ControlCanvas::traverse(osg::NodeVisitor& nv)
                 {
                     for( unsigned i=1; i<getNumChildren(); ++i )
                     {
-                        Control* control = static_cast<Control*>( getChild(i) );
-                        if ( control->isDirty() )
+                        Control* control = dynamic_cast<Control*>( getChild(i) );
+                        if ( control && control->isDirty() )
                         {
                             needsUpdate = true;
                             break;

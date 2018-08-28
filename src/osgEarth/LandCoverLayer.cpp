@@ -17,12 +17,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 #include <osgEarth/LandCoverLayer>
-#include <osgEarth/ImageUtils>
 #include <osgEarth/Registry>
 #include <osgEarth/Map>
 #include <osgEarth/MetaTile>
 #include <osgEarth/SimplexNoise>
-#include <osgEarth/ThreadingUtils>
 #include <osgEarth/Progress>
 
 using namespace osgEarth;
@@ -239,7 +237,9 @@ namespace
             if (coverageOptions.enabled() == false)
                 continue;
 
-            coverageOptions.cachePolicy() = CachePolicy::NO_CACHE; // TODO: yes? no?
+            // We never want to cache data from a coverage, because the "parent" layer
+            // will be caching the entire result of a multi-coverage composite.
+            coverageOptions.cachePolicy() = CachePolicy::NO_CACHE;
 
             // Create the coverage layer:
             LandCoverCoverageLayer* layer = new LandCoverCoverageLayer( coverageOptions );
@@ -327,7 +327,10 @@ namespace
                 for(int L = layers.size()-1; L >= 0 && !wrotePixel; --L)
                 {
                     if (progress && progress->isCanceled())
+                    {
+                        OE_DEBUG << LC << key.str() << " canceled" << std::endl;
                         return 0L;
+                    }
 
                     ILayer& layer = layers[L];
                     if ( !layer.valid )
@@ -512,9 +515,6 @@ LandCoverLayer::createImageImplementation(const TileKey& key, ProgressCallback* 
         {
             for (int y = -1; y <= 1; ++y)
             {
-                if (progress && progress->isCanceled())
-                    return GeoImage::INVALID;
-
                 // compute the neighoring key:
                 TileKey subkey = key.createNeighborKey(x, y);
                 if (subkey.valid())
@@ -532,6 +532,12 @@ LandCoverLayer::createImageImplementation(const TileKey& key, ProgressCallback* 
                             metaImage.setImage(x, y, tile.getImage(), scaleBias);
                         }
                     }
+                }
+
+                if (progress && progress->isCanceled())
+                {
+                    OE_DEBUG << LC << key.str() << " canceled" << std::endl;
+                    return GeoImage::INVALID;
                 }
             }
         }
@@ -576,9 +582,6 @@ LandCoverLayer::createImageImplementation(const TileKey& key, ProgressCallback* 
             for (int s = 0; s < image->s(); ++s)
             {
                 double u = (double)s / (double)(image->s() - 1);
-                
-                if (progress && progress->isCanceled())
-                    return GeoImage::INVALID;
 
                 cov.set(u, v);
 
@@ -605,6 +608,12 @@ LandCoverLayer::createImageImplementation(const TileKey& key, ProgressCallback* 
                 else
                 {
                     write(nodata, s, t);
+                }
+                
+                if (progress && progress->isCanceled())
+                {
+                    OE_DEBUG << LC << key.str() << " canceled" << std::endl;
+                    return GeoImage::INVALID;
                 }
             }
         }

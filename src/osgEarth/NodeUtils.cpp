@@ -19,13 +19,7 @@
 
 #include <osgEarth/NodeUtils>
 #include <osgEarth/CullingUtils>
-#include <osg/Geode>
 #include <osg/Geometry>
-#include <osg/CullSettings>
-#include <osg/KdTree>
-#include <osg/TriangleFunctor>
-#include <vector>
-#include <string>
 
 using namespace osgEarth;
 

@@ -20,14 +20,8 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>
 */
 #include <osgEarthUtil/Sky>
-#include <osgEarthUtil/Ephemeris>
-#include <osgEarth/Registry>
-#include <osgEarth/ShaderFactory>
-#include <osgEarth/ShaderUtils>
-#include <osgEarth/Extension>
 #include <osgEarth/MapNode>
 #include <osgEarth/GLUtils>
-#include <osgDB/ReadFile>
 
 using namespace osgEarth;
 using namespace osgEarth::Util;
@@ -143,24 +137,18 @@ SkyNode::setAtmosphereVisible(bool value)
 
 //------------------------------------------------------------------------
 
-#define MAPNODE_TAG     "__osgEarth::MapNode"
 #define SKY_OPTIONS_TAG "__osgEarth::Util::SkyOptions"
 
 SkyNode*
-SkyNode::create(const SkyOptions& options, MapNode* mapNode)
+SkyNode::create(const SkyOptions& options)
 {
-    if ( !mapNode ) {
-        OE_WARN << LC << "Internal error; null map node passed to SkyNode::Create\n";
-        return 0L;
-    }
-
     std::string driverName = osgEarth::trim(options.getDriver());
     if ( driverName.empty() )
         driverName = "simple";
 
     std::string extensionName = std::string("sky_") + driverName;
 
-    osg::ref_ptr<Extension> extension = Extension::create( extensionName, options );
+    osg::ref_ptr<Extension> extension = Extension::create(extensionName, options);
     if ( !extension.valid() ) {
         OE_WARN << LC << "Failed to load extension for sky driver \"" << driverName << "\"\n";
         return 0L;
@@ -172,24 +160,23 @@ SkyNode::create(const SkyOptions& options, MapNode* mapNode)
         return 0L;
     }
 
-    osg::ref_ptr<SkyNode> result = factory->createSkyNode(mapNode->getMap()->getProfile());
-
+    osg::ref_ptr<SkyNode> result = factory->createSkyNode();
     return result.release();
 }
 
 SkyNode*
-SkyNode::create(MapNode* mapNode)
+SkyNode::create()
 {
     SkyOptions options;
-    return create(options, mapNode);
+    return create(options);
 }
 
 SkyNode*
-SkyNode::create(const std::string& driver, MapNode* mapNode)
+SkyNode::create(const std::string& driver)
 {
     SkyOptions options;
     options.setDriver( driver );
-    return create( options, mapNode );
+    return create(options);
 }
 
 
@@ -201,12 +188,4 @@ SkyDriver::getSkyOptions(const osgDB::Options* options) const
     static SkyOptions s_default;
     const void* data = options->getPluginData(SKY_OPTIONS_TAG);
     return data ? *static_cast<const SkyOptions*>(data) : s_default;
-}
-
-
-MapNode*
-SkyDriver::getMapNode(const osgDB::Options* options) const
-{
-    return const_cast<MapNode*>(
-        static_cast<const MapNode*>( options->getPluginData(MAPNODE_TAG) ) );
 }

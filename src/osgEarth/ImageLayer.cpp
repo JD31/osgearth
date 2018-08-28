@@ -17,22 +17,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 #include <osgEarth/ImageLayer>
-#include <osgEarth/ColorFilter>
-#include <osgEarth/TileSource>
 #include <osgEarth/ImageMosaic>
-#include <osgEarth/ImageUtils>
 #include <osgEarth/Registry>
-#include <osgEarth/StringUtils>
 #include <osgEarth/Progress>
-#include <osgEarth/URI>
-#include <osgEarth/MemCache>
-#include <osgEarth/Registry>
 #include <osgEarth/Capabilities>
 #include <osgEarth/Metrics>
-#include <osg/Version>
-#include <osgDB/WriteFile>
-#include <memory.h>
-#include <limits.h>
 
 using namespace osgEarth;
 using namespace OpenThreads;
@@ -590,7 +579,10 @@ ImageLayer::createImageInKeyProfile(const TileKey&    key,
         << key.getExtent().toString() << std::endl;
 
     // the cache key combines the Key and the horizontal profile.
-    std::string cacheKey = Stringify() << key.str() << "_" << key.getProfile()->getHorizSignature();
+    std::string cacheKey = Cache::makeCacheKey(
+        Stringify() << key.str() << "-" << key.getProfile()->getHorizSignature(),
+        "image");
+
     const CachePolicy& policy = getCacheSettings()->cachePolicy().get();
     
     // Check the layer L2 cache first
@@ -681,6 +673,12 @@ ImageLayer::createImageInKeyProfile(const TileKey&    key,
     if ( result.valid() )
     {
         ImageUtils::fixInternalFormat( result.getImage() );
+    }
+
+    // Check for cancelation before writing to a cache:
+    if (progress && progress->isCanceled())
+    {
+        return GeoImage::INVALID;
     }
 
     // memory cache first:
@@ -775,11 +773,15 @@ ImageLayer::createImageFromTileSource(const TileKey&    key,
     // blacklist this tile for future requests.
     if (result == 0L)
     {
-        if ( progress == 0L ||
-             ( !progress->isCanceled() && !progress->needsRetry() ) )
+        if ( progress == 0L || !progress->isCanceled() )
         {
             source->getBlacklist()->add( key );
         }
+    }
+
+    if (progress && progress->isCanceled())
+    {
+        return GeoImage::INVALID;
     }
 
     return GeoImage(result.get(), key.getExtent());
@@ -858,7 +860,7 @@ ImageLayer::assembleImage(const TileKey& key, ProgressCallback* progress)
                 // the tile source did not return a tile, so make a note of it.
                 failedKeys.push_back( *k );
 
-                if (progress && (progress->isCanceled() || progress->needsRetry()))
+                if (progress && progress->isCanceled())
                 {
                     retry = true;
                     break;
@@ -960,6 +962,11 @@ ImageLayer::assembleImage(const TileKey& key, ProgressCallback* progress)
         isCoverage() == false)
     {
         ImageUtils::featherAlphaRegions( result.getImage() );
+    }
+
+    if (progress && progress->isCanceled())
+    {
+        return GeoImage::INVALID;
     }
 
     return result;

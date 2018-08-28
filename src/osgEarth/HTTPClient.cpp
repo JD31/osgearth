@@ -17,22 +17,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 #include <osgEarth/HTTPClient>
-#include <osgEarth/Registry>
-#include <osgEarth/Version>
 #include <osgEarth/Progress>
-#include <osgEarth/StringUtils>
 #include <osgEarth/Metrics>
 #include <osgDB/ReadFile>
-#include <osgDB/Registry>
 #include <osgDB/FileNameUtils>
-#include <osg/Notify>
-#include <osg/Timer>
-#include <string.h>
-#include <sstream>
-#include <fstream>
-#include <iterator>
-#include <iostream>
-#include <algorithm>
 #include <curl/curl.h>
 
 // Whether to use WinInet instead of cURL - CMAKE option
@@ -299,6 +287,18 @@ _lastModified(0u)
 unsigned
 HTTPResponse::getCode() const {
     return _response_code;
+}
+
+unsigned
+HTTPResponse::getCodeCategory() const 
+{
+    return
+        getCode() < 100 ? CATEGORY_UNKNOWN :
+        getCode() < 200 ? CATEGORY_INFORMATIONAL :
+        getCode() < 300 ? CATEGORY_SUCCESS :
+        getCode() < 400 ? CATEGORY_REDIRECTION :
+        getCode() < 500 ? CATEGORY_CLIENT_ERROR :
+                          CATEGORY_SERVER_ERROR;
 }
 
 bool
@@ -1473,17 +1473,19 @@ HTTPClient::doReadImage(const HTTPRequest&    request,
     else
     {
         result = ReadResult(
-            response.isCancelled()                           ? ReadResult::RESULT_CANCELED :
-            response.getCode() == HTTPResponse::NOT_FOUND    ? ReadResult::RESULT_NOT_FOUND :
-            response.getCode() == HTTPResponse::SERVER_ERROR ? ReadResult::RESULT_SERVER_ERROR :
+            response.isCancelled() ? ReadResult::RESULT_CANCELED :
+            response.getCode() == HTTPResponse::NOT_FOUND ? ReadResult::RESULT_NOT_FOUND :
             response.getCode() == HTTPResponse::NOT_MODIFIED ? ReadResult::RESULT_NOT_MODIFIED :
-                                                               ReadResult::RESULT_UNKNOWN_ERROR );
+            response.getCodeCategory() == HTTPResponse::CATEGORY_SERVER_ERROR ? ReadResult::RESULT_SERVER_ERROR :
+            ReadResult::RESULT_UNKNOWN_ERROR);
 
         //If we have an error but it's recoverable, like a server error or timeout then set the callback to retry.
         if (HTTPClient::isRecoverable( result.code() ) )
         {
             if (callback)
             {
+                callback->cancel();
+
                 if ( s_HTTP_DEBUG )
                 {
                     if (response.isCancelled())
@@ -1495,7 +1497,6 @@ HTTPClient::doReadImage(const HTTPRequest&    request,
                         OE_NOTICE << LC << "Error in HTTPClient for " << request.getURL() << " but it's recoverable" << std::endl;
                     }
                 }
-                callback->setNeedsRetry( true );
             }
         }
     }
@@ -1556,17 +1557,19 @@ HTTPClient::doReadNode(const HTTPRequest&    request,
     else
     {
         result = ReadResult(
-            response.isCancelled()                           ? ReadResult::RESULT_CANCELED :
-            response.getCode() == HTTPResponse::NOT_FOUND    ? ReadResult::RESULT_NOT_FOUND :
-            response.getCode() == HTTPResponse::SERVER_ERROR ? ReadResult::RESULT_SERVER_ERROR :
+            response.isCancelled() ? ReadResult::RESULT_CANCELED :
+            response.getCode() == HTTPResponse::NOT_FOUND ? ReadResult::RESULT_NOT_FOUND :
             response.getCode() == HTTPResponse::NOT_MODIFIED ? ReadResult::RESULT_NOT_MODIFIED :
-                                                               ReadResult::RESULT_UNKNOWN_ERROR );
+            response.getCodeCategory() == HTTPResponse::CATEGORY_SERVER_ERROR ? ReadResult::RESULT_SERVER_ERROR :
+            ReadResult::RESULT_UNKNOWN_ERROR);
 
         //If we have an error but it's recoverable, like a server error or timeout then set the callback to retry.
         if (HTTPClient::isRecoverable( result.code() ) )
         {
             if (callback)
             {
+                callback->cancel();
+
                 if ( s_HTTP_DEBUG )
                 {
                     if (response.isCancelled())
@@ -1578,7 +1581,6 @@ HTTPClient::doReadNode(const HTTPRequest&    request,
                         OE_NOTICE << LC << "Error in HTTPClient for " << request.getURL() << " but it's recoverable" << std::endl;
                     }
                 }
-                callback->setNeedsRetry( true );
             }
         }
     }
@@ -1637,15 +1639,17 @@ HTTPClient::doReadObject(const HTTPRequest&    request,
         result = ReadResult(
             response.isCancelled() ? ReadResult::RESULT_CANCELED :
             response.getCode() == HTTPResponse::NOT_FOUND ? ReadResult::RESULT_NOT_FOUND :
-            response.getCode() == HTTPResponse::SERVER_ERROR ? ReadResult::RESULT_SERVER_ERROR :
             response.getCode() == HTTPResponse::NOT_MODIFIED ? ReadResult::RESULT_NOT_MODIFIED :
-            ReadResult::RESULT_UNKNOWN_ERROR );
+            response.getCodeCategory() == HTTPResponse::CATEGORY_SERVER_ERROR ? ReadResult::RESULT_SERVER_ERROR :
+            ReadResult::RESULT_UNKNOWN_ERROR);
 
         //If we have an error but it's recoverable, like a server error or timeout then set the callback to retry.
         if (HTTPClient::isRecoverable( result.code() ) )
         {
             if (callback)
             {
+                callback->cancel();
+
                 if ( s_HTTP_DEBUG )
                 {
                     if (response.isCancelled())
@@ -1657,7 +1661,6 @@ HTTPClient::doReadObject(const HTTPRequest&    request,
                         OE_NOTICE << LC << "Error in HTTPClient for " << request.getURL() << " but it's recoverable" << std::endl;
                     }
                 }
-                callback->setNeedsRetry( true );
             }
         }
     }
@@ -1682,30 +1685,29 @@ HTTPClient::doReadString(const HTTPRequest&    request,
     {
         result = ReadResult( new StringObject(response.getPartAsString(0)) );
     }
-
-    else if ( response.getCode() >= 400 && response.getCode() < 500 && response.getCode() != 404 )
-    {
-        // for request errors, return an error result with the part data intact
-        // so the user can parse it as needed. We only do this for readString.
-        result = ReadResult(
-            ReadResult::RESULT_SERVER_ERROR,
-            new StringObject(response.getPartAsString(0)) );
-    }
-
     else
     {
         result = ReadResult(
-            response.isCancelled() ?                           ReadResult::RESULT_CANCELED :
-            response.getCode() == HTTPResponse::NOT_FOUND    ? ReadResult::RESULT_NOT_FOUND :
-            response.getCode() == HTTPResponse::SERVER_ERROR ? ReadResult::RESULT_SERVER_ERROR :
+            response.isCancelled() ? ReadResult::RESULT_CANCELED :
+            response.getCode() == HTTPResponse::NOT_FOUND ? ReadResult::RESULT_NOT_FOUND :
             response.getCode() == HTTPResponse::NOT_MODIFIED ? ReadResult::RESULT_NOT_MODIFIED :
-                                                               ReadResult::RESULT_UNKNOWN_ERROR );
+            response.getCodeCategory() == HTTPResponse::CATEGORY_SERVER_ERROR ? ReadResult::RESULT_SERVER_ERROR :
+            ReadResult::RESULT_UNKNOWN_ERROR);
+        
+        // for request errors, return an error result with the part data intact
+        // so the user can parse it as needed. We only do this for readString.
+        if (response.getNumParts() > 0u)
+        {
+            result.setErrorDetail(response.getPartAsString(0));
+        }
 
         //If we have an error but it's recoverable, like a server error or timeout then set the callback to retry.
         if (HTTPClient::isRecoverable( result.code() ) )
         {
             if (callback)
             {
+                callback->cancel();
+
                 if ( s_HTTP_DEBUG )
                 {
                     if (response.isCancelled())
@@ -1717,7 +1719,6 @@ HTTPClient::doReadString(const HTTPRequest&    request,
                         OE_NOTICE << LC << "Error in HTTPClient for " << request.getURL() << " but it's recoverable" << std::endl;
                     }
                 }
-                callback->setNeedsRetry( true );
             }
         }
     }
@@ -1726,7 +1727,7 @@ HTTPClient::doReadString(const HTTPRequest&    request,
     result.setMetadata( response.getHeadersAsConfig() );
 
     // last-modified (file time)
-    result.setLastModifiedTime( response._lastModified ); //getCurlFileTime(_curl_handle) );
+    result.setLastModifiedTime( response._lastModified );
 
     return result;
 }

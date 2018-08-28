@@ -64,6 +64,7 @@ Stroke::init()
     _minPixels.init     ( 0.0f );
     _stipplePattern.init( 0xFFFF );
     _stippleFactor.init ( 1u );
+    _smooth.init        ( false );
 }
 
 Config 
@@ -85,6 +86,7 @@ Stroke::getConfig() const {
     // Add optionnal secondary color and altitude to display this color
     conf.addObjIfSet("2", _color2);
     conf.addIfSet("2-criteria-blw-alt", _color2criteriaBelowAlt);
+    conf.addIfSet("smooth", _smooth);
 
     return conf;
 }
@@ -109,4 +111,5 @@ Stroke::mergeConfig( const Config& conf ) {
     // Add optionnal secondary color and altitude to display this color
     conf.getObjIfSet("2", _color2);
     conf.getIfSet("2-criteria-blw-alt", _color2criteriaBelowAlt);
+    conf.getIfSet("smooth", _smooth);
 }

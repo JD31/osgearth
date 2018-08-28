@@ -18,15 +18,12 @@
  */
 
 #include <osgEarth/Progress>
-#include <osgEarth/Notify>
 
 using namespace osgEarth;
 
 ProgressCallback::ProgressCallback() :
 osg::Referenced( true ),
 _canceled      ( false ),
-_failed        ( false ),
-_needsRetry    ( false ),
 _collectStats  ( false )
 {
     //NOP
@@ -35,7 +32,6 @@ _collectStats  ( false )
 void ProgressCallback::reportError(const std::string& msg)
 {
     _message = msg;
-    _failed = true;
 }
 
 bool ProgressCallback::reportProgress(double             current,

@@ -42,10 +42,14 @@ namespace osgEarth {
 
 
         public:
-            ClusterNode(MapNode* mapNode, osg::Image* defaultImage = 0);
+            ClusterNode(MapNode* mapNode = 0, osg::Image* defaultImage = 0);
+
+            MapNode* getMapNode() const;
+            void setMapNode(MapNode* mapNode);
 
             void addNode(osg::Node* node);
             void removeNode(osg::Node* node);
+            void clear();
 
             unsigned int getRadius() const;
             void setRadius(unsigned int radius);
@@ -65,9 +69,9 @@ namespace osgEarth {
 
             PlaceNode* getOrCreateLabel();
 
-            void getClusters(osg::Camera* camera, ClusterList& out);
+            void getClusters(osgUtil::CullVisitor* cv, ClusterList& out);
+            void buildIndex();
 
-            //PlaceNodeList _placeNodes;
             osg::NodeList _nodes;
 
             unsigned int _radius;
@@ -86,6 +90,9 @@ namespace osgEarth {
             osg::Matrixd _lastViewMatrix;
 
             ClusterList _clusters;
+
+            osg::NodeList _clusterIndex;
+            bool _dirtyIndex;
 
             bool _dirty;
 

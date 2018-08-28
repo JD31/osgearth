@@ -431,11 +431,19 @@ ExtrudeGeometryFilter::buildStructure(const Geometry*         input,
                     // insert a new fake corner.
 					Corners::iterator new_corner;
 
-                    if ( isLastEdge )
+                    if (isLastEdge)
                     {
-						corners.push_back(Corner());
-						new_corner = c;
-						new_corner++;
+                        if (structure.isPolygon)
+                        {
+                            corners.push_back(Corner());
+                            new_corner = c;
+                            new_corner++;
+                        }
+                        else
+                        {
+                            // We only add a fake corner at the end for polygons
+                            break;
+                        }
                     }
                     else
                     {
@@ -1268,8 +1276,10 @@ ExtrudeGeometryFilter::push( FeatureList& input, FilterContext& context )
     {
         osg::StateSet* groupStateSet = group->getOrCreateStateSet();
         groupStateSet->setAttributeAndModes( new osg::PolygonOffset(1,1), 1 );
+#ifdef OSG_GL_FIXED_FUNCTION_AVAILABLE
         if ( _outlineSymbol->stroke()->width().isSet() )
             groupStateSet->setAttributeAndModes( new osg::LineWidth(*_outlineSymbol->stroke()->width()), 1 );
+#endif
     }
 
     return group;

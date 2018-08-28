@@ -18,27 +18,18 @@
  */
 #include <osgEarth/LineDrawable>
 #include <osgEarth/Shaders>
-#include <osgEarth/VirtualProgram>
-#include <osgEarth/Utils>
 #include <osgEarth/Registry>
 #include <osgEarth/Capabilities>
-#include <osgEarth/StateSetCache>
 #include <osgEarth/LineFunctor>
 #include <osgEarth/GLUtils>
 #include <osgEarth/CullingUtils>
 
-#include <osg/Depth>
-#include <osg/CullFace>
 #include <osg/LineStipple>
 #include <osg/LineWidth>
-#include <osg/TemplatePrimitiveFunctor>
 #include <osgUtil/Optimizer>
 
 #include <osgDB/ObjectWrapper>
-#include <osgDB/InputStream>
-#include <osgDB/OutputStream>
 
-#include <stack>
 
 #if defined(OSG_GLES1_AVAILABLE) || defined(OSG_GLES2_AVAILABLE) || defined(OSG_GLES3_AVAILABLE)
 #define OE_GLES_AVAILABLE
@@ -344,6 +335,7 @@ _factor(1),
 _pattern(0xFFFF),
 _color(1, 1, 1, 1),
 _width(1.0f),
+_smooth(false),
 _first(0u),
 _count(0u),
 _current(NULL),
@@ -366,6 +358,7 @@ _factor(1),
 _pattern(0xFFFF),
 _color(1,1,1,1),
 _width(1.0f),
+_smooth(false),
 _first(0u),
 _count(0u),
 _current(NULL),
@@ -391,6 +384,7 @@ _color(rhs._color),
 _factor(rhs._factor),
 _pattern(rhs._pattern),
 _width(rhs._width),
+_smooth(rhs._smooth),
 _first(rhs._first),
 _count(rhs._count),
 _current(NULL),
@@ -504,6 +498,16 @@ LineDrawable::setStippleFactor(GLint factor)
 }
 
 void
+LineDrawable::setLineSmooth(bool value)
+{
+    if (_smooth != value)
+    {
+        _smooth = value;
+        GLUtils::setLineSmooth(getOrCreateStateSet(), _smooth? 1 : 0);
+    }
+}
+
+void
 LineDrawable::setColor(const osg::Vec4& color)
 {
     if (_color != color)
@@ -545,8 +549,12 @@ LineDrawable::setColor(unsigned vi, const osg::Vec4& color)
         if (_mode == GL_LINE_STRIP || _mode == GL_LINE_LOOP)
         {
             if (vi == 0)
+            {
                 for (unsigned i=0; i<2; ++i)
                     (*_colors)[i] = color;
+                for (unsigned i=_colors->size()-2; i<_colors->size(); ++i)
+                    (*_colors)[i] = color;
+            }
             else
                 for (unsigned i=vi*4-2; i<vi*4+2; ++i)
                     (*_colors)[i] = color;
@@ -780,6 +788,13 @@ LineDrawable::setVertex(unsigned vi, const osg::Vec3& vert)
 {
     initialize();
 
+    // if we've already called dirty() that means we are editing a completed
+    // drawable and therefore need dynamic variance.
+    if (getNumPrimitiveSets() > 0u && getDataVariance() != DYNAMIC)
+    {
+        setDataVariance(DYNAMIC);
+    }
+
     unsigned size = _current->size();
     unsigned numVerts = getNumVerts();
     
@@ -797,7 +812,6 @@ LineDrawable::setVertex(unsigned vi, const osg::Vec3& vert)
                 // update the main verts:
                 for (unsigned n = ri; n < ri+rnum; ++n)
                     (*_current)[n] = vert;
-                _current->dirty();
 
                 // update next/previous verts:
                 if (numVerts == 1u)
@@ -817,10 +831,11 @@ LineDrawable::setVertex(unsigned vi, const osg::Vec3& vert)
                         (*_next)[rni+n] = vert;
                         (*_previous)[rpi+n] = vert;
                     }
-
-                    _next->dirty();
-                    _previous->dirty();
                 }
+                
+                _current->dirty();
+                _next->dirty();
+                _previous->dirty();
             }
 
             else if (_mode == GL_LINE_LOOP)
@@ -831,7 +846,6 @@ LineDrawable::setVertex(unsigned vi, const osg::Vec3& vert)
                 // update the main verts:
                 for (unsigned n = ri; n < ri+rnum; ++n)
                     (*_current)[n] = vert;
-                _current->dirty();
 
                 // update next/previous verts:
                 if (numVerts == 1u)
@@ -851,10 +865,11 @@ LineDrawable::setVertex(unsigned vi, const osg::Vec3& vert)
                         (*_next)[rni+n] = vert;
                         (*_previous)[rpi+n] = vert;
                     }
-
-                    _next->dirty();
-                    _previous->dirty();
                 }
+                
+                _current->dirty();
+                _next->dirty();
+                _previous->dirty();
             }
 
             else if (_mode == GL_LINES)
@@ -898,10 +913,16 @@ LineDrawable::setVertex(unsigned vi, const osg::Vec3& vert)
 const osg::Vec3&
 LineDrawable::getVertex(unsigned index) const
 {
+    return (*_current)[getRealIndex(index)];
+}
+
+unsigned
+LineDrawable::getRealIndex(unsigned index) const
+{
     if (_gpu)
-        return (_mode == GL_LINE_STRIP || _mode == GL_LINE_LOOP) ? (*_current)[index * 4u] : (*_current)[index * 2u];
+        return (_mode == GL_LINE_STRIP || _mode == GL_LINE_LOOP) ? index*4u : index*2u;
     else
-        return (*_current)[index];
+        return index;
 }
 
 void

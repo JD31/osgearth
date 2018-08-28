@@ -22,11 +22,7 @@
 #include <osgEarth/Registry>
 #include <osgEarth/NodeUtils>
 #include <osgEarth/TerrainEngineNode>
-#include <osgEarth/Terrain>
 
-#include <osg/Depth>
-#include <osg/ClipNode>
-#include <osg/ClipPlane>
 
 #define LC "[GeodeticGraticule] "
 
@@ -717,8 +713,7 @@ GeodeticGraticule::initLabelPool(CameraData& cdata)
     unsigned int labelPoolSize = 8 * options().gridLines().get();
     for (unsigned int i = 0; i < labelPoolSize; i++)
     {
-        GeoPoint pt(srs, 0,0,0);
-        LabelNode* label = new LabelNode(_mapNode.get(), pt, "0,0");
+        LabelNode* label = new LabelNode("0,0");
         label->setDynamic(true);
         label->setStyle(style);
         cdata._labelPool.push_back(label);

@@ -87,48 +87,6 @@ _index          ( 0 )
     setStyle( style );
 }
 
-FeatureNode::FeatureNode(MapNode* mapNode,
-                         Feature* feature,
-                         const Style& in_style,
-                         const GeometryCompilerOptions& options,
-                         StyleSheet* styleSheet) :
-AnnotationNode(),
-_options           ( options ),
-_needsRebuild      ( true ),
-_styleSheet        ( styleSheet ),
-_clampDirty        (false),
-_index             ( 0 )
-{
-    _features.push_back( feature );
-
-    FeatureNode::setMapNode( mapNode );
-
-    Style style = in_style;
-    if (style.empty() && feature->style().isSet())
-    {
-        style = *feature->style();
-    }
-
-    setStyle( style );
-}
-
-FeatureNode::FeatureNode(MapNode* mapNode,
-                         const FeatureList& features,
-                         const Style& style,
-                         const GeometryCompilerOptions& options,
-                         StyleSheet* styleSheet):
-AnnotationNode(),
-_options        ( options ),
-_needsRebuild   ( true ),
-_styleSheet     ( styleSheet ),
-_clampDirty     ( false ),
-_index          ( 0 )
-{
-    _features.insert( _features.end(), features.begin(), features.end() );
-    FeatureNode::setMapNode( mapNode );
-    setStyle( style );
-}
-
 void
 FeatureNode::build()
 {
@@ -162,6 +120,7 @@ FeatureNode::build()
         options.ignoreAltitudeSymbol() = true;
     }
 
+    _clamperData.clear();
 
     osg::Node* node = _compiled.get();
     if (_needsRebuild || !_compiled.valid() )
@@ -251,8 +210,12 @@ FeatureNode::build()
         {
             if ( ap.sceneClamping )
             {
-                getMapNode()->getTerrain()->addTerrainCallback( _clampCallback.get() );
-                clamp( getMapNode()->getTerrain()->getGraph(), getMapNode()->getTerrain() );
+                // Need dynamic data variance since scene clamping will change the verts
+                SetDataVarianceVisitor sdv(osg::Object::DYNAMIC);
+                this->accept(sdv);
+
+                getMapNode()->getTerrain()->addTerrainCallback(_clampCallback.get());
+                clamp(getMapNode()->getTerrain()->getGraph(), getMapNode()->getTerrain());
             }
             else
             {
@@ -338,7 +301,7 @@ void FeatureNode::setFeature(Feature* feature)
     build();
 }
 
-void FeatureNode::init()
+void FeatureNode::dirty()
 {
     _needsRebuild = true;
     build();
@@ -388,10 +351,10 @@ FeatureNode::clamp(osg::Node* graph, const Terrain* terrain)
         bool relative = alt && alt->clamping() == alt->CLAMP_RELATIVE_TO_TERRAIN && alt->technique() == alt->TECHNIQUE_SCENE;
         float offset = alt ? alt->verticalOffset()->eval() : 0.0f;
 
-        GeometryClamper clamper;
+        GeometryClamper clamper(_clamperData);
         clamper.setTerrainPatch( graph );
         clamper.setTerrainSRS( terrain->getSRS() );
-        clamper.setPreserveZ( relative );
+        clamper.setUseVertexZ( relative );
         clamper.setOffset( offset );
 
         this->accept( clamper );
@@ -422,10 +385,9 @@ FeatureNode::traverse(osg::NodeVisitor& nv)
 OSGEARTH_REGISTER_ANNOTATION( feature, osgEarth::Annotation::FeatureNode );
 
 
-FeatureNode::FeatureNode(MapNode*              mapNode,
-                         const Config&         conf,
-                         const osgDB::Options* dbOptions ) :
-AnnotationNode(conf),
+FeatureNode::FeatureNode(const Config&         conf,
+                         const osgDB::Options* readOptions ) :
+AnnotationNode(conf, readOptions),
 _clampDirty(false),
 _index(0)
 {
@@ -447,7 +409,7 @@ _index(0)
 
     conf.getObjIfSet( "style", _style );
 
-    FeatureNode::setMapNode( mapNode );
+    //FeatureNode::setMapNode( mapNode );
 
     if ( srs.valid() && geom.valid() )
     {
@@ -457,6 +419,7 @@ _index(0)
         conf.getIfSet( "geointerp", "rhumbline",   feature->geoInterp(), GEOINTERP_RHUMB_LINE );
 
         _features.push_back( feature );
+
         build();
     }
 }

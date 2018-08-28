@@ -316,7 +316,7 @@ public:
     }
 
     //override
-    FeatureCursor* createFeatureCursor(const Symbology::Query& query)
+    FeatureCursor* createFeatureCursor(const Symbology::Query& query, ProgressCallback* progress)
     {
         if ( _geometry.valid() )
         {
@@ -345,14 +345,23 @@ public:
 
             if ( dsHandle && layerHandle )
             {
+                Query newQuery(query);
+                if (_options.query().isSet())
+                {
+                    newQuery = _options.query()->combineWith(query);
+                }
+
+                OE_DEBUG << newQuery.getConfig().toJSON(true) << std::endl;
+
                 // cursor is responsible for the OGR handles.
                 return new FeatureCursorOGR( 
                     dsHandle,
                     layerHandle, 
                     this,
                     getFeatureProfile(),
-                    query,
-                    getFilters() );
+                    newQuery,
+                    getFilters(),
+                    progress);
             }
             else
             {

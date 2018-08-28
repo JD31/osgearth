@@ -99,6 +99,9 @@ namespace osgEarth { namespace Symbology
         optional<unsigned short>& stipple() { return _stipplePattern; }
         const optional<unsigned short>& stipple() const { return _stipplePattern; }
 
+        /** Smoothing/antialiasing */
+        optional<bool>& smooth() { return _smooth; }
+        const optional<bool>& smooth() const { return _smooth; }
 
         /** Rounding ratio - when rounding corners/caps, this is the ratio
             of rounded-segment length to width(). The smaller this value,
@@ -132,6 +135,7 @@ namespace osgEarth { namespace Symbology
         //Add an alternative color
         optional<Fill>           _color2;
         optional<unsigned>       _color2criteriaBelowAlt;
+        optional<bool>           _smooth;
 
         void init();
     };

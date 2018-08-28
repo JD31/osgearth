@@ -17,17 +17,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 #include <osgEarth/CacheBin>
-#include <osgEarth/ImageUtils>
-#include <osgEarth/ThreadingUtils>
 #include <osgEarth/Registry>
 #include <osgEarth/Cache>
 
-#include <osgDB/ReaderWriter>
 #include <osgDB/FileNameUtils>
 #include <osgDB/Registry>
-#include <osg/NodeVisitor>
-#include <osg/Texture>
-#include <osg/Image>
 #include <osg/TextureBuffer>
 
 using namespace osgEarth;
@@ -254,8 +248,8 @@ namespace
                 {
                     // get the hashed key that the cache bin will use to actually write the image,
                     // and replace the image filename with it.
-                    std::string cacheKey = path;
-                    std::string hashKey = _bin->getHashedKey(cacheKey);
+                    std::string cacheKey = Cache::makeCacheKey(path, "xref");
+                    //std::string hashKey = _bin->getHashedKey(cacheKey);
 
                     // Append the pseudoloader suffix so our PL can locate the image in the cache.
                     image.setFileName(cacheKey + ".osgearth_cachebin");

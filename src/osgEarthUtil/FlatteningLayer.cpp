@@ -19,13 +19,7 @@
 #include <osgEarthUtil/FlatteningLayer>
 #include <osgEarth/Registry>
 #include <osgEarth/HeightFieldUtils>
-#include <osgEarth/Map>
-#include <osgEarth/Progress>
-#include <osgEarth/Utils>
 #include <osgEarthFeatures/FeatureCursor>
-#include <osgEarthFeatures/GeometryUtils>
-#include <osgEarthFeatures/FilterContext>
-#include <osgEarthSymbology/Query>
 
 using namespace osgEarth;
 using namespace osgEarth::Util;
@@ -867,7 +861,7 @@ FlatteningLayer::createImplementation(const TileKey& key,
             Query query;        
             query.tileKey() = *i;
 
-            osg::ref_ptr<FeatureCursor> cursor = _featureSource->createFeatureCursor(query);
+            osg::ref_ptr<FeatureCursor> cursor = _featureSource->createFeatureCursor(query, progress);
             while (cursor.valid() && cursor->hasMore())
             {
                 Feature* feature = cursor->nextFeature();
@@ -915,7 +909,7 @@ FlatteningLayer::createImplementation(const TileKey& key,
         query.bounds() = queryExtent.bounds();
 
         // Run the query and fill the list.
-        osg::ref_ptr<FeatureCursor> cursor = _featureSource->createFeatureCursor(query);
+        osg::ref_ptr<FeatureCursor> cursor = _featureSource->createFeatureCursor(query, progress);
         while (cursor.valid() && cursor->hasMore())
         {
             Feature* feature = cursor->nextFeature();

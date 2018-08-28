@@ -626,6 +626,20 @@ namespace osgEarth { namespace Util
         TetherCallback* getTetherCallback() { return _tetherCallback.get(); }
 
         /**
+         * Post-camera-update callback; use to access the camera position after
+         * the call to updateCamera (for frame synchronization)
+         */
+        class UpdateCameraCallback : public osg::Referenced
+        {
+        public:
+            virtual void onUpdateCamera(const osg::Camera*) { }
+        protected:
+            virtual ~UpdateCameraCallback() { }
+        };
+        void setUpdateCameraCallback(UpdateCameraCallback* cb) { _updateCameraCallback = cb; }
+        UpdateCameraCallback* getUpdateCameraCallback() { return _updateCameraCallback.get(); }
+
+        /**
          * Move the focal point of the camera using deltas (normalized screen coords).
          */
         virtual void pan( double dx, double dy );
@@ -798,6 +812,12 @@ namespace osgEarth { namespace Util
         // This sets the camera's roll based on your location on the globe.
         void recalculateRoll();
 
+        // Gets the matrix without a pre-MapNode transform (i.e., map world space)
+        osg::Matrixd getWorldMatrix() const;
+
+        // Gets the inverse matrix without a pre-MapNode transform (i.e., map world space)
+        osg::Matrixd getWorldInverseMatrix() const;
+
     protected:
 
         enum TaskType
@@ -912,6 +932,7 @@ namespace osgEarth { namespace Util
         osg::ref_ptr<const osgGA::GUIEventAdapter> _ga_t0;
 
         osg::ref_ptr<const osgGA::GUIEventAdapter> _mouse_down_event;
+        bool _pushed;
 
         osg::observer_ptr<osg::Node> _node;
         osg::observer_ptr<MapNode>   _mapNode;
@@ -992,6 +1013,8 @@ namespace osgEarth { namespace Util
 
         TetherMode              _lastTetherMode;
 
+        osg::Matrix             _mapNodeFrame, _mapNodeFrameInverse;
+
         // returns "t", the parametric coefficient of a timed transition. 1=finished.
         double setViewpointFrame(double time_s);
 
@@ -1027,6 +1050,8 @@ namespace osgEarth { namespace Util
         osg::Node::NodeMask  _findNodeTraversalMask;
 
         osg::ref_ptr<TetherCallback> _tetherCallback;
+
+        osg::ref_ptr<UpdateCameraCallback> _updateCameraCallback;
 
         bool _userWillCallUpdateCamera;
 

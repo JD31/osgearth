@@ -18,17 +18,23 @@ How do I place a 3D model on the map?
 .....................................
 
     The ``osgEarth::GeoTransform`` class inherits from ``osg::Transform``
-    and will convert map coordinates into OSG world coordinates for you::
+    and will convert map coordinates into OSG world coordinates for you.
+    Place an object at a geospatial position like this::
 
         GeoTransform* xform = new GeoTransform();
-        ...
-        xform->setTerrain( mapNode->getTerrain() );
-        ...
+        GeoPoint point(srs, -121.0, 34.0, 1000.0);
+        xform->setPosition(point);
+
+    If you want your object to automatically clamp to the terrain surface,
+    assign a terrain and leave off the altitude::
+
+        GeoTransform* xform = new GeoTransform();
+        xform->setTerrain(mapNode->getTerrain());
         GeoPoint point(srs, -121.0, 34.0);
         xform->setPosition(point);
 
 
-I added a node, but it has no texture/lighting/etc. in osgEarth. Why?
+I loaded a model, but it has no texture/lighting/etc. in osgEarth. Why?
 .....................................................................
 
     Everything under an osgEarth scene graph is rendered with shaders.
@@ -36,13 +42,41 @@ I added a node, but it has no texture/lighting/etc. in osgEarth. Why?
     need to create shader components in order for them to render properly.
 
     osgEarth has a built-in shader generator for this purpose. Run the
-    shader generator on your node like so:
+    shader generator on your node like so::
 
         osgEarth::Registry::shaderGenerator().run( myNode );
 
     After that, your node will contain shader snippets that allows osgEarth
     to render it properly and for it to work with other osgEarth features
     like sky lighting.
+
+
+My Annotations (FeatureNode, etc.) are not rendering. Why?
+..........................................................
+
+    Best practice is to place an Annotation node (FeatureNodes, PlaceNodes, etc.)
+    as a descendant of the MapNode in your scene graph. You can also add them
+    to an AnnotationLayer and add that layer to the Map.
+
+    Annotations need access to the MapNode in order to render properly. If you 
+    cannot place them under the MapNode, you will have to manually install a few
+    things to make them work::
+
+        #include <osgEarth/CullingUtils>
+        #include <osgEarth/GLUtils>
+        ...
+
+        // Manully assign the MapNode to your annotation
+        annotationNode->setMapNode(mapNode);
+
+        // In some group above the annotation, install this callback
+        group->addCullCallback(new InstallViewportSizeUniform());
+
+        // In some group above the annotation, set the GL defaults
+        GLUtils::setGlobalDefaults(group->getOrCreateStateSet());
+
+    Again: MapNode does all this automatically so this is only necessary if you do
+    not place your annotations as descendants of the MapNode.
 
 
 How do make the terrain transparent?
@@ -56,12 +90,12 @@ How do make the terrain transparent?
             <options>
                 <terrain color="#ffffff00" ...
 
-    In code, this option is found in the ``MPTerrainEngineOptions`` class::
+    In code, this option is found in the ``RexTerrainEngineOptions`` class::
     
-        #include <osgEarthDrivers/engine_mp/MPTerrainEngineOptions>
-        using namespace osgEarth::Drivers::MPTerrainEngine;
+        #include <osgEarthDrivers/engine_mp/RexTerrainEngineOptions>
+        using namespace osgEarth::Drivers::RexTerrainEngine;
         ...
-        MPTerrainEngineOptions options;
+        RexTerrainEngineOptions options;
         options.color() = osg::Vec4(1,1,1,0);
 
 
@@ -73,12 +107,13 @@ How do I set the resolution of terrain tiles?
     into triangles.
     
     You can expressly set the terrain's tile size by using the Map options.
-    osgEarth will then resample all elevation data to the size you specify::
+    osgEarth will then resample all elevation data to the size you specify.
+    You will get best results from a tile size that is a power of 2 plus 1::
 
         <map>
             <options>
                 <terrain>
-                    <tile_size>65</tile_size> 
+                    <tile_size>9</tile_size> 
                     ...
 
 

@@ -21,20 +21,14 @@
 */
 #include <osgEarthUtil/LogarithmicDepthBuffer>
 #include <osgEarthUtil/Shaders>
-#include <osgEarth/CullingUtils>
-#include <osgEarth/VirtualProgram>
 #include <osgEarth/Registry>
 #include <osgEarth/Capabilities>
-#include <osgEarth/ShaderUtils>
-#include <osgUtil/CullVisitor>
-#include <osg/Uniform>
-#include <osg/buffered_value>
-#include <cmath>
 
 #define LC "[LogarithmicDepthBuffer] "
 
 #define LOG2(X) (::log((double)(X))/::log(2.0))
-#define FC_UNIFORM "oe_logDepth_FC"
+//#define FC_UNIFORM "oe_logDepth_FC"
+#define LDB_UNIFORM "oe_Far"
 
 // This is only used in the "precise" variant.
 #define NEAR_RES_COEFF 0.001  // a.k.a. "C"
@@ -44,6 +38,7 @@ using namespace osgEarth::Util;
 
 //------------------------------------------------------------------------
 
+#if 0
 namespace
 {
     // Callback to set the "far plane" uniform just before drawing.
@@ -70,8 +65,9 @@ namespace
             {
                 float vfov, ar, n, f;
                 proj.getPerspective(vfov, ar, n, f);
-                float fc = (float)(2.0/LOG2(_coeff*f+1.0));
-                _uniform->set( fc );
+                //float fc = (float)(2.0/LOG2(_coeff*f+1.0));
+                //_uniform->set( fc );
+                _uniform->set(f);
             }
 
             if ( _next.valid() )
@@ -81,6 +77,7 @@ namespace
         }
     };
 }
+#endif
 
 //------------------------------------------------------------------------
 
@@ -90,7 +87,7 @@ _useFragDepth(false)
     _supported = Registry::capabilities().supportsGLSL();
     if ( _supported )
     {
-        _FCUniform = new osg::Uniform(FC_UNIFORM, (float)0.0f);
+        _FCUniform = new osg::Uniform(LDB_UNIFORM, (float)0.0f);
     }
     else
     {
@@ -125,13 +122,13 @@ LogarithmicDepthBuffer::install(osg::Camera* camera)
             pkg.load( vp, pkg.LogDepthBuffer_VertOnly_VertFile );
         }
 
-        osg::ref_ptr<osg::Camera::DrawCallback> next = camera->getPreDrawCallback();
-        if ( dynamic_cast<SetFarPlaneUniformCallback*>(next.get()) )
-            next = static_cast<SetFarPlaneUniformCallback*>(next.get())->_next.get();
-        
-        stateset->addUniform( _FCUniform.get() );
+        //osg::ref_ptr<osg::Camera::DrawCallback> next = camera->getPreDrawCallback();
+        //if ( dynamic_cast<SetFarPlaneUniformCallback*>(next.get()) )
+        //    next = static_cast<SetFarPlaneUniformCallback*>(next.get())->_next.get();
+        //
+        //stateset->addUniform( _FCUniform.get() );
 
-        camera->setPreDrawCallback( new SetFarPlaneUniformCallback(_FCUniform.get(), next.get()) );
+        //camera->setPreDrawCallback( new SetFarPlaneUniformCallback(_FCUniform.get(), next.get()) );
     }
 }
 
@@ -140,12 +137,12 @@ LogarithmicDepthBuffer::uninstall(osg::Camera* camera)
 {
     if ( camera && _supported )
     {
-        SetFarPlaneUniformCallback* dc = dynamic_cast<SetFarPlaneUniformCallback*>(camera->getPreDrawCallback());
-        if ( dc )
-        {
-            osg::ref_ptr<osg::Camera::DrawCallback> next = dc->_next.get();
-            camera->setPreDrawCallback( next.get() );
-        }
+        //SetFarPlaneUniformCallback* dc = dynamic_cast<SetFarPlaneUniformCallback*>(camera->getPreDrawCallback());
+        //if ( dc )
+        //{
+        //    osg::ref_ptr<osg::Camera::DrawCallback> next = dc->_next.get();
+        //    camera->setPreDrawCallback( next.get() );
+        //}
 
         osg::StateSet* stateset = camera->getStateSet();
         if ( stateset )
@@ -159,7 +156,7 @@ LogarithmicDepthBuffer::uninstall(osg::Camera* camera)
                 pkg.unload( vp, pkg.LogDepthBuffer_VertOnly_VertFile );
             }
 
-            stateset->removeUniform( FC_UNIFORM );
+            stateset->removeUniform( LDB_UNIFORM );
         }
     }
 }

@@ -17,41 +17,25 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 #include <osgEarthUtil/MGRSGraticule>
-#include <osgEarthUtil/MGRSFormatter>
 #include <osgEarthUtil/UTMLabelingEngine>
 
-#include <osgEarthFeatures/GeometryCompiler>
 #include <osgEarthFeatures/TextSymbolizer>
-#include <osgEarthFeatures/FeatureSource>
 #include <osgEarthFeatures/TessellateOperator>
 
 #include <osgEarthAnnotation/FeatureNode>
 
 #include <osgEarth/Registry>
-#include <osgEarth/CullingUtils>
-#include <osgEarth/Utils>
 #include <osgEarth/PagedNode>
-#include <osgEarth/ShaderUtils>
 #include <osgEarth/Endian>
 #include <osgEarth/LineDrawable>
 #include <osgEarth/GLUtils>
-#include <osgEarth/Shaders>
+#include <osgEarth/Text>
 
-#include <osg/BlendFunc>
-#include <osg/PagedLOD>
 #include <osg/Depth>
-#include <osg/LogicOp>
-#include <osg/MatrixTransform>
-#include <osg/ClipNode>
-#include <osg/Version>
-#include <osgDB/FileNameUtils>
-#include <osgDB/ReaderWriter>
 //#include <osgDB/WriteFile>
 
 #include <osgEarthDrivers/feature_ogr/OGRFeatureOptions>
 
-#include <fstream>
-#include <sstream>
 
 #define LC "[MGRSGraticule] "
 
@@ -138,7 +122,7 @@ namespace
         {
             // Read source data into an array:
             FeatureList sqids;
-            osg::ref_ptr<FeatureCursor> sqid_cursor = sqid_fs->createFeatureCursor();
+            osg::ref_ptr<FeatureCursor> sqid_cursor = sqid_fs->createFeatureCursor(0L);
             if (sqid_cursor.valid() && sqid_cursor->hasMore())
                 sqid_cursor->fill(sqids);
 
@@ -149,8 +133,8 @@ namespace
             // We will need a local XY SRS for geometry simplification:
             const SpatialReference* xysrs = SpatialReference::get("spherical-mercator");
 
-            u_long count = OE_ENCODE_LONG(sqids.size());
-            out.write(reinterpret_cast<const char*>(&count), sizeof(u_long));
+            u_int count = OE_ENCODE_LONG(sqids.size());
+            out.write(reinterpret_cast<const char*>(&count), sizeof(u_int));
 
             for (FeatureList::iterator i = sqids.begin(); i != sqids.end(); ++i)
             {
@@ -211,13 +195,13 @@ namespace
         if (fin.eof() || fin.is_open() == false)
             return false;
 
-        u_long count;
-        fin.read(reinterpret_cast<char*>(&count), sizeof(u_long));
+        u_int count;
+        fin.read(reinterpret_cast<char*>(&count), sizeof(u_int));
         count = OE_DECODE_LONG(count);
 
         const SpatialReference* wgs84 = SpatialReference::get("wgs84");
 
-        for (u_long i = 0; i < count; ++i)
+        for (u_int i = 0; i < count; ++i)
         {
             char gzd[4]; gzd[3] = 0;
             fin.read(gzd, 3);
@@ -236,7 +220,7 @@ namespace
             if (numPoints > 16384)
             {
                 OE_WARN << LC << "sqid bin file is corrupt.. abort!" << std::endl;
-                exit(-1);
+                return false;
             }
 
             osgEarth::Symbology::Ring* line = new osgEarth::Symbology::Ring();
@@ -730,7 +714,7 @@ namespace
         {
             GeometryCompilerOptions gco;
             gco.shaderPolicy() = SHADERPOLICY_INHERIT;
-            return new FeatureNode(0L, _sqidFeatures, _style, gco);
+            return new FeatureNode(_sqidFeatures, _style, gco);
         }
     };
 
@@ -883,7 +867,8 @@ namespace
             {
                 const Feature* feature = f->get();
                 std::string sqid = feature->getString("sqid");
-                osgText::Text* drawable = symbolizer.create(sqid);
+                osgText::Text* drawable = new osgEarth::Text(sqid);
+                symbolizer.apply(drawable);
 #ifdef USE_SCREEN_COORDS
                 drawable->setCharacterSizeMode(osgText::Text::SCREEN_COORDS);
 #else
@@ -981,9 +966,13 @@ namespace
                 textSym->alignment() = textSym->ALIGN_LEFT_BASE_LINE;
         
             TextSymbolizer symbolizer( textSym.get() );
-            osgText::Text* drawable = symbolizer.create(getName());
+            osgText::Text* drawable = new osgEarth::Text(getName());
+            symbolizer.apply(drawable);
+
 #ifdef USE_SCREEN_COORDS
             drawable->setCharacterSizeMode(osgText::Text::SCREEN_COORDS);
+            //drawable->setPosition(osg::Vec3(0,0,0));
+            //drawable->setCharacterSize(36);
 #else
             drawable->setCharacterSizeMode(osgText::Text::OBJECT_COORDS);
             drawable->setCharacterSize(130000);
@@ -1079,7 +1068,7 @@ MGRSGraticule::rebuild()
         // Root of the text tree
         osg::Group* textTop = new osg::Group();
         osg::StateSet* textSS = textTop->getOrCreateStateSet();
-        TextSymbolizer::installShaders(textSS);
+        //TextSymbolizer::insta(textSS);
         top->addChild(textTop);
 
         // build the GZD feature set

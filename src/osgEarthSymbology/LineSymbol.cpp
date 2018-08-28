@@ -151,4 +151,7 @@ LineSymbol::parseSLD(const Config& c, Style& style)
     else if( match(c.key(), "stroke-2-criteria-blw-alt") ) {
         style.getOrCreate<LineSymbol>()->stroke()->color2criteriaBelowAlt() = as<unsigned>(c.value(),0);
     }
+    else if (match(c.key(), "stroke-smooth")) {
+        style.getOrCreate<LineSymbol>()->stroke()->smooth() = as<bool>(c.value(), false);
+    }
 }

@@ -26,6 +26,7 @@
 #include <osgEarth/DrapeableNode>
 #include <osgEarth/ClampableNode>
 #include <osgEarth/GLUtils>
+#include <osgEarth/Progress>
 #include <osg/Notify>
 
 using namespace osgEarth;
@@ -210,7 +211,9 @@ FeatureModelSource::initialize(const osgDB::Options* readOptions)
         return Status::Error(Status::ServiceUnavailable, "Failed to create a feature driver");
 
     // open the feature source if it exists:
-    const Status& featuresStatus = _features->open(_readOptions.get());
+    _features->setReadOptions(_readOptions.get());
+
+    const Status& featuresStatus = _features->open();
     if (featuresStatus.isError())
         return featuresStatus;
 

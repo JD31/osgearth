@@ -24,6 +24,7 @@
 #include <osgEarthAnnotation/PlaceNode>
 #include <osgEarth/DepthOffset>
 #include <osgEarth/VirtualProgram>
+#include <osgEarth/StateSetCache>
 #include <osgDB/FileNameUtils>
 #include <osgUtil/Optimizer>
 
@@ -57,6 +58,7 @@ public:
         Style styleCopy = style;
         TextSymbol* text = styleCopy.get<TextSymbol>();
         IconSymbol* icon = styleCopy.get<IconSymbol>();
+        AltitudeSymbol* alt = styleCopy.get<AltitudeSymbol>();
 
         osg::Group* group = new osg::Group();
         
@@ -69,6 +71,7 @@ public:
         StringExpression  iconUrlExpr     ( icon ? *icon->url()      : StringExpression() );
         NumericExpression iconScaleExpr   ( icon ? *icon->scale()    : NumericExpression() );
         NumericExpression iconHeadingExpr ( icon ? *icon->heading()  : NumericExpression() );
+        NumericExpression vertOffsetExpr  ( alt  ? *alt->verticalOffset() : NumericExpression() );
 
         for( FeatureList::const_iterator i = input.begin(); i != input.end(); ++i )
         {
@@ -130,7 +133,7 @@ public:
                     tempStyle.get<IconSymbol>()->heading()->setLiteral( feature->eval(iconHeadingExpr, &context) );
             }
 
-            osg::Node* node = makePlaceNode(
+            osgEarth::Annotation::PlaceNode* node = makePlaceNode(
                 context,
                 feature,
                 tempStyle,
@@ -140,6 +143,19 @@ public:
 
             if ( node )
             {
+                if (!textPriorityExpr.empty())
+                {
+                    float val = feature->eval(textPriorityExpr, &context);
+                    node->setPriority( val >= 0.0f ? val : FLT_MAX );
+                }
+
+                if (alt && alt->technique() == alt->TECHNIQUE_SCENE && !vertOffsetExpr.empty())
+                {
+                    float val = feature->eval(vertOffsetExpr, &context);
+                    const osg::Vec3d& off = node->getLocalOffset();
+                    node->setLocalOffset(osg::Vec3d(off.x(), off.y(), val));
+                }
+
                 if ( context.featureIndex() )
                 {
                     context.featureIndex()->tagNode(node, feature);
@@ -153,7 +169,7 @@ public:
     }
 
 
-    osg::Node* makePlaceNode(FilterContext&     context,
+    osgEarth::Annotation::PlaceNode* makePlaceNode(FilterContext&     context,
                              Feature*           feature, 
                              const Style&       style, 
                              NumericExpression& priorityExpr,
@@ -161,7 +177,7 @@ public:
     {
         const osg::Vec3d center = feature->getGeometry()->getBounds().center();
         GeoPoint geoCenter = buildGeoPoint(center, style.getSymbol<AltitudeSymbol>(), feature->getSRS());
-        PlaceNode* node = 0L;
+        PlaceNode* node = nullptr;
 
         if ( autoLineFollowing )
         {
@@ -196,28 +212,37 @@ public:
 
                 if( style.getSymbol<TextSymbol>()->autoOffsetGeomWKT().isSet() )
                 {
-                    node = new PlaceNode(0L, geoCenter, style, context.getDBOptions());
+                    node = new PlaceNode();
+                    node->setStyle(style, context.getDBOptions());
+                    node->setPosition(geoCenter);
+
                     // Direction to the longest distance
                     if( (geoStart.vec3d() - geoCenter.vec3d()).length2() > (geoEnd.vec3d() - geoCenter.vec3d()).length2() )
                         node->setLineCoords(geoEnd, geoStart);
                     else
-                node->setLineCoords(geoStart, geoEnd);
+                        node->setLineCoords(geoStart, geoEnd);
             }
                 else if( style.getSymbol<TextSymbol>()->autoOffsetPreferedPosition().isSet()
                         && style.getSymbol<TextSymbol>()->autoOffsetPreferedPosition() == TextSymbol::LEFT )
                 {
-                    node = new PlaceNode(0L, geoStart, style, context.getDBOptions());
+                    node = new PlaceNode();
+                    node->setStyle(style, context.getDBOptions());
+                    node->setPosition(geoStart);
                     node->setLineCoords(geoStart, geoEnd);
                 }
                 else if( style.getSymbol<TextSymbol>()->autoOffsetPreferedPosition().isSet()
                          && style.getSymbol<TextSymbol>()->autoOffsetPreferedPosition() == TextSymbol::RIGHT )
                 {
-                    node = new PlaceNode(0L, geoEnd, style, context.getDBOptions());
+                    node = new PlaceNode();
+                    node->setStyle(style, context.getDBOptions());
+                    node->setPosition(geoEnd);
                     node->setLineCoords(geoEnd, geoStart);
                 }
                 else
                 {
-                    node = new PlaceNode(0L, geoCenter, style, context.getDBOptions());
+                    node = new PlaceNode();
+                    node->setStyle(style, context.getDBOptions());
+                    node->setPosition(geoCenter);
                     node->setLineCoords(geoStart, geoEnd);
                 }
             }
@@ -225,10 +250,12 @@ public:
 
         else
         {
-            node = new PlaceNode(0L, geoCenter, style, context.getDBOptions());
+            node = new PlaceNode();
+            node->setStyle(style, context.getDBOptions());
+            node->setPosition(geoCenter);
         }
 
-        if ( !priorityExpr.empty() && node != 0L )
+        if ( !priorityExpr.empty() && node != nullptr )
         {
             float val = feature->eval(priorityExpr, &context);
             node->setPriority( val >= 0.0f ? val : FLT_MAX );
