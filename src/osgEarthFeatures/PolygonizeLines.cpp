@@ -228,7 +228,7 @@ PolygonizeLinesOperator::operator()(osg::Vec3Array*  verts,
 
             // the buffering vector is orthogonal to the direction vector and the normal;
             // flip it depending on the current side.
-            osg::Vec3 bufVecUnit = (dir ^ up) * side;
+            osg::Vec3 bufVecUnit = (dir ^ normal) * side;
             bufVecUnit.normalize();
 
             // scale the buffering vector to half the stroke width.
