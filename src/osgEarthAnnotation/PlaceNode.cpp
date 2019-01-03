@@ -259,10 +259,13 @@ PlaceNode::init()
             textSymbol->alignment() = textSymbol->ALIGN_LEFT_CENTER;
     }
 
-    text = AnnotationUtils::createTextDrawable(
+    if( ! _text.empty() && symbol )
+    {
+        text = AnnotationUtils::createTextDrawable(
             _text,
-            _style.get<TextSymbol>(),
+            symbol,
             imageBox );
+    }
 
     const BBoxSymbol* bboxsymbol = _style.get<BBoxSymbol>();
     if ( bboxsymbol && text )
@@ -316,6 +319,14 @@ PlaceNode::setPriority(float value)
 }
 
 void
+PlaceNode::setLineCoords( const GeoPoint& lineStartPoint, const GeoPoint& lineEndPoint )
+{
+    _lineStartPoint = lineStartPoint;
+    _lineEndPoint = lineEndPoint;
+    updateLayoutData();
+}
+
+void
 PlaceNode::updateLayoutData()
 {
     if (!_dataLayout.valid())
@@ -333,20 +344,6 @@ PlaceNode::updateLayoutData()
     
     GeoPoint location = getPosition();
     location.makeGeographic();
-    double latRad;
-    double longRad;
-    GeoMath::destination(osg::DegreesToRadians(location.y()),
-        osg::DegreesToRadians(location.x()),
-        _labelRotationRad,
-        2500.,
-        latRad,
-        longRad);
-
-    _geoPointProj.set(osgEarth::SpatialReference::get("wgs84"),
-        osg::RadiansToDegrees(longRad),
-        osg::RadiansToDegrees(latRad),
-        0,
-        osgEarth::ALTMODE_ABSOLUTE);
 
     _geoPointLoc.set(osgEarth::SpatialReference::get("wgs84"),
         //location.getSRS(),
@@ -362,11 +359,41 @@ PlaceNode::updateLayoutData()
         
         if (_followFixedCourse)
         {
+            double latRad;
+            double longRad;
+            GeoMath::destination(osg::DegreesToRadians(location.y()),
+                osg::DegreesToRadians(location.x()),
+                _labelRotationRad,
+                2500.,
+                latRad,
+                longRad);
+
+            _lineEndPoint.set(osgEarth::SpatialReference::get("wgs84"),
+                osg::RadiansToDegrees(longRad),
+                osg::RadiansToDegrees(latRad),
+                0,
+                osgEarth::ALTMODE_ABSOLUTE);
+
             osg::Vec3d p0, p1;
             _geoPointLoc.toWorld(p0);
-            _geoPointProj.toWorld(p1);
+            _lineEndPoint.toWorld(p1);
             _dataLayout->setAnchorPoint(p0);
-            _dataLayout->setProjPoint(p1);
+            _dataLayout->setLineEndPoint(p1);
+            _dataLayout->setAutoRotate(true);
+        }
+
+        if ( (ts->autoOffsetAlongLine().get() || ts->autoRotateAlongLine().get()) && _lineStartPoint.isValid() && _lineEndPoint.isValid() )
+        {
+            osg::Vec3d p0, p1, p2;
+            _lineStartPoint.toWorld(p0);
+            _lineEndPoint.toWorld(p1);
+            _geoPointLoc.toWorld(p2);
+            _dataLayout->setLineStartPoint(p0);
+            _dataLayout->setLineEndPoint(p1);
+            _dataLayout->setAnchorPoint(p2);
+
+            _dataLayout->setAutoFollowLine( ts->autoOffsetAlongLine().get() );
+            _dataLayout->setAutoRotate( ts->autoRotateAlongLine().get() );
         }
     }
 }
