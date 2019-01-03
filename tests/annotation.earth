@@ -215,5 +215,40 @@ osgEarth Sample - Annotations
             </style>
         </label>
         
+        <feature name="Line constraint">
+            <srs>wgs84</srs>
+            <geometry>
+                LINESTRING(-130 45, -125 44)
+            </geometry>
+            <style type="text/css">
+                stroke:              #ffffff77;
+                stroke-width:        7;
+                stroke-tessellation-size: 1km;
+                altitude-clamping:   terrain-drape;
+            </style>
+        </feature>
+        <feature name="Label on line constraint">
+            <srs>wgs84</srs>
+            <geometry>
+                POINT(-125 44)
+            </geometry>
+            <style type="text/css">
+                text-bbox-fill: 			#00FF0033;
+                text-bbox-margin: 			6;
+                text-bbox-border: 			#FFFFFFFF;
+                text-bbox-border-width: 	1;
+				text-bbox-geom: 			box_oriented_symetric;
+				text-content:				"32L";
+                text-align:     			center_center;
+				text-auto-offset-alongline:	true;
+				<!--text-auto-offset-position:	right;-->
+				text-auto-rotate-alongline:	true;
+				text-auto-offset-support:	"LINESTRING(-130 45, -125 44)";
+				altitude-clamping: 			terrain;
+				altitude-technique:	 		map;
+            </style>
+        </feature>
+		
     </annotations>
+		
 </map>
