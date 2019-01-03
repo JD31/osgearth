@@ -141,32 +141,31 @@ namespace
             apply((osg::Node&)geode);
         }
 
-        // assume: stateSet is safely referenced by caller
+
+        /**
+         * @brief Insert all attributes of a stateSet in the shared cache and replace them.
+         * @param stateSet The stateSet on which attributes are put in the cache.
+         * @sa osgEarth::StateSetCache
+         */
         void applyStateSet(osg::StateSet* stateSet)
         {
-            osg::StateSet::AttributeList& attrs = stateSet->getAttributeList();
-            for( osg::StateSet::AttributeList::iterator i = attrs.begin(); i != attrs.end(); ++i )
-            {
-                osg::ref_ptr<osg::StateAttribute> in, shared;
-                in = i->second.first.get();
-                if ( in.valid() && _cache->share(in, shared) )
-                {
-                    i->second.first = shared.get();
+            for(auto& attr :  stateSet->getAttributeList()) {
+                osg::ref_ptr<osg::StateAttribute> stateAttribute = attr.second.first;
+                if(stateAttribute.valid()) {
+                    osg::ref_ptr<osg::StateAttribute> sharedAttribute;
+                    _cache->share(stateAttribute, sharedAttribute);
+                    attr.second.first = sharedAttribute;
                 }
             }
 
             osg::StateSet::TextureAttributeList& texAttrs = stateSet->getTextureAttributeList();
-            for( osg::StateSet::TextureAttributeList::iterator j = texAttrs.begin(); j != texAttrs.end(); ++j )
-            {
-                osg::StateSet::AttributeList& attrs = *j;
-                for( osg::StateSet::AttributeList::iterator i = attrs.begin(); i != attrs.end(); ++i )
-                {
-                    osg::StateAttribute* sa = i->second.first.get();
-                    osg::ref_ptr<osg::StateAttribute> in, shared;
-                    in = i->second.first.get();
-                    if ( in.valid() && _cache->share(in, shared) )
-                    {
-                        i->second.first = shared.get();
+            for(auto& attrs : texAttrs) {
+                for(auto& attr : attrs) {
+                    osg::ref_ptr<osg::StateAttribute> stateAttribute = attr.second.first;
+                    if ( stateAttribute.valid() ) {
+                        osg::ref_ptr<osg::StateAttribute> sharedAttribute;
+                        _cache->share(stateAttribute, sharedAttribute);
+                        attr.second.first = sharedAttribute;
                     }
                 }
             }
@@ -441,7 +440,6 @@ StateSetCache::prune()
     {
         if ( i->get()->referenceCount() <= 1 )
         {
-            i->get()->releaseGLObjects( 0L );
             _stateAttributeCache.erase( i++ );
             sa_count++;
         }
