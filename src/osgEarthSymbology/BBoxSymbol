@@ -36,7 +36,9 @@ namespace osgEarth { namespace Symbology
 
         enum BboxGeom {
             GEOM_BOX,
-            GEOM_BOX_ORIENTED
+            GEOM_BOX_ORIENTED,
+            GEOM_BOX_ORIENTED_SYM,
+            GEOM_BOX_ROUNDED
         };
 
         META_Object(osgEarthSymbology, BBoxSymbol);
