@@ -31,19 +31,25 @@
 #include <osgEarth/Tessellator>
 #include <osgEarth/Utils>
 #include <osgEarth/Clamping>
+#include <osgEarth/CullingUtils>
+#include <osg/Depth>
 #include <osg/Geode>
 #include <osg/Geometry>
 #include <osg/LineWidth>
 #include <osg/LineStipple>
 #include <osg/Point>
+#include <osg/PolygonOffset>
+#include <osg/ValueObject>
+#include <osg/Version>
 #include <osg/MatrixTransform>
 #include <osg/TriangleIndexFunctor>
 #include <osgText/Text>
 #include <osgUtil/Tessellator>
 #include <osgUtil/Optimizer>
 #include <osgUtil/Simplifier>
+#include <osgUtil/SmoothingVisitor>
 #include <osgDB/WriteFile>
-#include <osg/Version>
+#include <bitset>
 #include <iterator>
 
 #define LC "[BuildGeometryFilter] "
@@ -98,7 +104,8 @@ _maxAngle_deg ( 180.0 ),
 _geoInterp    ( GEOINTERP_RHUMB_LINE ),
 _maxPolyTilingAngle_deg( 45.0f ),
 _optimizeVertexOrdering( false ),
-_maximumCreaseAngle( 0.0f )
+_maximumCreaseAngle( 0.0f ),
+_useGPULines (false)
 {
     //nop
 }
@@ -226,10 +233,30 @@ BuildGeometryFilter::processPolygons(FeatureList& features, FilterContext& conte
                 // assign the primary color array. PER_VERTEX required in order to support
                 // vertex optimization later
                 unsigned count = osgGeom->getVertexArray()->getNumElements();
+                
                 osg::Vec4Array* colors = new osg::Vec4Array;
-                colors->assign( count, primaryColor );
-                osgGeom->setColorArray( colors );
-                osgGeom->setColorBinding( osg::Geometry::BIND_PER_VERTEX );
+          
+                
+                if(_colorBinding.isSet())
+                {  //if the color binding option is set
+                    //set the nuber of colors to 1 if there is no color binding or one color for the whole geometry
+                   
+                    if(_colorBinding.get() == osg::Geometry::BIND_OVERALL)
+                    {
+                        count=1;
+                     }
+                    colors->assign( count, primaryColor );
+                    osgGeom->setColorArray( colors );
+                    //assign the new color binding
+                    osgGeom->setColorBinding( _colorBinding.get() );
+                }
+                else
+                {    //default behavior                     
+                    colors->assign( count, primaryColor );
+                    osgGeom->setColorArray( colors );
+                    osgGeom->setColorBinding( osg::Geometry::BIND_PER_VERTEX );
+                }
+              
 
                 geode->addDrawable( osgGeom );
 
@@ -280,7 +307,7 @@ BuildGeometryFilter::processPolygonizedLines(FeatureList&   features,
                                              bool           twosided,
                                              FilterContext& context)
 {
-    osg::Group* group = new osg::Group;    
+    osg::Group* group = new osg::Group;
 
     // establish some referencing
     bool                    makeECEF   = false;
@@ -360,14 +387,27 @@ BuildGeometryFilter::processPolygonizedLines(FeatureList&   features,
         {
             Geometry* part = parts.next();
 
+            std::vector<Geometry*> partList;
+
+            // stipple
+            if (line->stroke()->stipplePattern().isSet()) {
+                calculateStippleGeometries(part, featureSRS, line->stroke()->stipplePattern().get(),
+                                           line->stroke()->stippleFactor().get(), partList);
+            } else {
+                partList.push_back(part);
+            }
+
+            for (int i = 0; i < partList.size(); i++) {
+                Geometry* currentPart = partList[i];
+
             // if the underlying geometry is a ring (or a polygon), close it so the
             // polygonizer will generate a closed loop.
-            Ring* ring = dynamic_cast<Ring*>(part);
+                Ring* ring = dynamic_cast<Ring*>(currentPart);
             if ( ring )
                 ring->close();
 
             // skip invalid geometry
-            if ( part->size() < 2 )
+            if (currentPart->size() < 2)
                 continue;
 
             // GPU clamping enabled?
@@ -381,7 +421,7 @@ BuildGeometryFilter::processPolygonizedLines(FeatureList&   features,
             {
                 hats = new osg::FloatArray();
                 hats->reserve( part->size() );
-                for(Geometry::const_iterator i = part->begin(); i != part->end(); ++i )
+                for(Geometry::const_iterator i = currentPart->begin(); i != currentPart->end(); ++i )
                     hats->push_back( i->z() );
             }
 
@@ -389,7 +429,7 @@ BuildGeometryFilter::processPolygonizedLines(FeatureList&   features,
             // a local reference point.
             osg::ref_ptr<osg::Vec3Array> verts   = new osg::Vec3Array();
             osg::ref_ptr<osg::Vec3Array> normals = new osg::Vec3Array();
-            transformAndLocalize( part->asVector(), featureSRS, verts.get(), normals.get(), outputSRS, _world2local, makeECEF );
+            transformAndLocalize( currentPart->asVector(), featureSRS, verts.get(), normals.get(), outputSRS, _world2local, makeECEF );
 
             // turn the lines into polygons.
             CopyHeightsCallback copyHeights(hats.get());
@@ -410,7 +450,8 @@ BuildGeometryFilter::processPolygonizedLines(FeatureList&   features,
                 Clamping::applyDefaultClampingAttrs( geom, input->getDouble("__oe_verticalOffset", 0.0) );
                 Clamping::setHeights( geom, copyHeights._newHeights.get() );
                 //OE_WARN << "heights = " << hats->size() << ", new hats = " << copyHeights._newHeights->size() << ", verts=" << geom->getVertexArray()->getNumElements() << std::endl;
-            }            
+            }
+	}            
         }
         polygonizer.installShaders( geode.get() );
     }
@@ -445,7 +486,7 @@ osg::Geode*
 BuildGeometryFilter::processLines(FeatureList& features, FilterContext& context)
 {
     osg::Geode* geode = new osg::Geode();
-    
+
     bool makeECEF = false;
     const SpatialReference* featureSRS = 0L;
     const SpatialReference* outputSRS = 0L;
@@ -571,10 +612,47 @@ BuildGeometryFilter::processLines(FeatureList& features, FilterContext& context)
                 }
 
                 // assign the primary color (PER_VERTEX required for later optimization)
+                unsigned count = osgGeom->getVertexArray()->getNumElements();
+                
                 osg::Vec4Array* colors = new osg::Vec4Array;
-                colors->assign( osgGeom->getVertexArray()->getNumElements(), primaryColor );
-                osgGeom->setColorArray( colors );
-                osgGeom->setColorBinding( osg::Geometry::BIND_PER_VERTEX );
+          
+                
+                
+                if(_colorBinding.isSet())
+                {  //if the color binding option is set
+                    //set the nuber of colors to 1 if there is no color binding or one color for the whole geometry
+                   
+                    if(_colorBinding.get() == osg::Geometry::BIND_OVERALL)
+                    {
+                        count=1;
+                     }
+                    colors->assign( count, primaryColor );
+                    osgGeom->setColorArray( colors );
+                    //assign the new color binding
+                    osgGeom->setColorBinding( _colorBinding.get() );
+                }
+                else
+                {    //default behavior                     
+                    colors->assign( count, primaryColor );
+                    osgGeom->setColorArray( colors );
+                    osgGeom->setColorBinding( osg::Geometry::BIND_PER_VERTEX );
+                }
+                
+              
+
+#ifdef __IOS__
+
+            // IOS TexCoord in order to display dashed lines
+            osg::Vec2Array* texCoords = new osg::Vec2Array();
+            float texStep = 1.0f / osgGeom->getVertexArray()->getNumElements();
+
+            for (int i = 0; i < osgGeom->getVertexArray()->getNumElements(); i++) {
+                texCoords->push_back(osg::Vec2(i * texStep, 0));
+            }
+
+            osgGeom->setTexCoordArray(0, texCoords, osg::Array::BIND_PER_VERTEX);
+
+#endif
 
                 geode->addDrawable( osgGeom );
 
@@ -673,11 +751,31 @@ BuildGeometryFilter::processPoints(FeatureList& features, FilterContext& context
             }
 
             // assign the primary color (PER_VERTEX required for later optimization)
+            unsigned count = osgGeom->getVertexArray()->getNumElements();
+            
             osg::Vec4Array* colors = new osg::Vec4Array;
-            colors->assign( osgGeom->getVertexArray()->getNumElements(), primaryColor );
-            osgGeom->setColorArray( colors );
-            osgGeom->setColorBinding( osg::Geometry::BIND_PER_VERTEX );
-
+      
+            if(_colorBinding.isSet())
+            {  //if the color binding option is set
+                //set the nuber of colors to 1 if there is no color binding or one color for the whole geometry
+               
+                if(_colorBinding.get() == osg::Geometry::BIND_OVERALL)
+                {
+                    count=1;
+                 }
+                colors->assign( count, primaryColor );
+                osgGeom->setColorArray( colors );
+                //assign the new color binding
+                osgGeom->setColorBinding( _colorBinding.get() );
+            }
+            else
+            {    //default behavior                     
+                colors->assign( count, primaryColor );
+                osgGeom->setColorArray( colors );
+                osgGeom->setColorBinding( osg::Geometry::BIND_PER_VERTEX );
+            }
+          
+            
             geode->addDrawable( osgGeom.get() );
 
             // record the geometry's primitive set(s) in the index:
@@ -1206,7 +1304,6 @@ BuildGeometryFilter::buildPolygon(Geometry*               ring,
     }
 }
 
-
 namespace
 {
     struct GenerateNormalFunctor
@@ -1453,6 +1550,24 @@ BuildGeometryFilter::push( FeatureList& input, FilterContext& context )
                 applyLineSymbology( geode->getOrCreateStateSet(), line );
             }
 
+#ifdef __IOS__
+            osg::Geometry* geom = geode->getDrawable(0)->asGeometry();
+            if (geom)
+	    {
+                osg::Array* array = geom->getVertexArray();
+
+                if (array)
+		{
+                    osg::Vec3Array* vertexArray = dynamic_cast<osg::Vec3Array*>(array);
+                    if (vertexArray)
+		    {
+                        osg::Uniform* firstPos = new osg::Uniform("firstPos", vertexArray->at(0));
+                        geode->getOrCreateStateSet()->addUniform(firstPos);
+                    }
+                }
+            }
+#endif
+
             result->addChild( geode.get() );
         }
     }
@@ -1492,5 +1607,111 @@ BuildGeometryFilter::push( FeatureList& input, FilterContext& context )
     else
     {
         return 0L;
+    }
+}
+
+void BuildGeometryFilter::calculateStippleGeometries(Geometry* input, const SpatialReference* srs,
+                                                     unsigned short pattern, int factor,
+                                                     std::vector<Geometry*>& out_geomList) {
+    if (!input)
+        return;
+
+    LineString* lineString = dynamic_cast<LineString*>(input);
+
+    if (!lineString)
+        return;
+
+    std::bitset<16> bits(pattern);
+
+    // get all line points
+    Vec3dVector linePoints = lineString->createVec3dArray()->asVector();
+
+    if (linePoints.size() < 2) {
+        out_geomList.push_back(input);
+        return;
+    }
+
+    // calculate line distance
+    double lineDistance = GeoMath::distance(linePoints, srs->getEllipsoid()->getRadiusEquator());
+
+    // pattern start index (to center the pattern on the line)
+    int startIndex = 15 - (((int)std::round(8.0 * lineDistance / factor) - 8) % 16);
+
+    out_geomList.clear();
+
+    bool currentFull = bits.test(startIndex);
+    int currentPointIndex = 1;
+    double distanceLastPoint = 0.0;
+    double distanceWithNextPoint = GeoMath::distance(linePoints[0], linePoints[1], srs);
+    Vec3dVector currentPoints;
+    bool stop = false;
+
+    if (currentFull)
+        currentPoints.push_back(linePoints[0]);
+
+    for (unsigned int i = 1; !stop; i++) {
+        // check segments with current distance
+
+        while ((((i * factor / 16.0) - distanceLastPoint) >= distanceWithNextPoint) && !stop) {
+            distanceLastPoint += distanceWithNextPoint;
+
+            if (currentFull)
+                currentPoints.push_back(linePoints[currentPointIndex]);
+
+            currentPointIndex++;
+
+            if (currentPointIndex >= linePoints.size())
+                stop = true;
+
+            if (!stop)
+                distanceWithNextPoint =
+                    GeoMath::distance(linePoints[currentPointIndex - 1], linePoints[currentPointIndex], srs);
+        }
+
+        if (stop)
+            continue;
+
+        // check pattern
+        bool full = bits.test((i + startIndex) % 16);
+
+        if (currentFull == full) {
+            // no change
+            continue;
+        }
+
+        currentFull = full;
+
+        // find current point
+
+        double distanceWithLastPoint = (i * factor / 16.0) - distanceLastPoint;
+
+        double bearing = GeoMath::bearing(osg::DegreesToRadians(linePoints[currentPointIndex - 1].y()),
+                                          osg::DegreesToRadians(linePoints[currentPointIndex - 1].x()),
+                                          osg::DegreesToRadians(linePoints[currentPointIndex].y()),
+                                          osg::DegreesToRadians(linePoints[currentPointIndex].x()));
+
+        double latRad, lonRad;
+        GeoMath::destination(osg::DegreesToRadians(linePoints[currentPointIndex - 1].y()),
+                             osg::DegreesToRadians(linePoints[currentPointIndex - 1].x()), bearing,
+                             distanceWithLastPoint, latRad, lonRad, srs->getEllipsoid()->getRadiusEquator());
+
+        osg::Vec3d point(osg::RadiansToDegrees(lonRad), osg::RadiansToDegrees(latRad),
+                         linePoints[currentPointIndex][2]);
+
+        if (currentFull) {
+            // set first point
+            currentPoints.clear();
+            currentPoints.push_back(point);
+        } else {
+            // create geometry
+            currentPoints.push_back(point);
+            out_geomList.push_back(Geometry::create(Geometry::TYPE_LINESTRING, &currentPoints));
+            currentPoints.clear();
+        }
+    }
+
+    // create last geometry
+    if (currentFull) {
+        out_geomList.push_back(Geometry::create(Geometry::TYPE_LINESTRING, &currentPoints));
     }
 }
