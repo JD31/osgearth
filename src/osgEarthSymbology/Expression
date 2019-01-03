@@ -102,6 +102,8 @@ namespace osgEarth { namespace Symbology
         typedef std::pair<std::string,unsigned> Variable;
         typedef std::vector<Variable> Variables;
 
+        typedef std::map<std::string, StringExpression> ConditionalExprs;
+
     public:
         StringExpression();
 
@@ -159,6 +161,9 @@ namespace osgEarth { namespace Symbology
         typedef std::pair<Op,std::string> Atom;
         typedef std::vector<Atom> AtomVector;
         
+        std::string     _condVar;
+        std::string     _condVal;
+        ConditionalExprs _condExprs;
         std::string  _src;
         AtomVector   _infix;
         Variables    _vars;
