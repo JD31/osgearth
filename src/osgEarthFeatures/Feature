@@ -84,9 +84,10 @@ namespace osgEarth { namespace Features
     struct AttributeValueUnion
     {
         std::string stringValue;
-        double      doubleValue;
-        int         intValue;
-        bool        boolValue;
+        double              doubleValue;
+        int                 intValue;
+        bool                boolValue;
+        osg::ref_ptr<osg::DoubleArray>    doubleArrayValue;
 
         //Whether the value is set.  A value of false means the value is effectively NULL
         bool        set;
@@ -98,7 +99,8 @@ namespace osgEarth { namespace Features
         ATTRTYPE_STRING,
         ATTRTYPE_INT,
         ATTRTYPE_DOUBLE,
-        ATTRTYPE_BOOL
+        ATTRTYPE_BOOL,
+        ATTRTYPE_DOUBLEARRAY
     };
 
     struct OSGEARTHFEATURES_EXPORT AttributeValue : public std::pair<AttributeType,AttributeValueUnion>
@@ -106,7 +108,8 @@ namespace osgEarth { namespace Features
         std::string getString() const;
         double getDouble( double defaultValue =0.0 ) const;
         int getInt( int defaultValue =0 ) const;
-        bool getBool( bool defaultValue =false ) const;              
+        bool getBool( bool defaultValue =false ) const;
+        osg::ref_ptr<osg::DoubleArray> getDoubleArray() const;
     };
     
     typedef std::map<std::string, AttributeValue, CIStringComp> AttributeTable;
@@ -209,6 +212,7 @@ namespace osgEarth { namespace Features
         void set( const std::string& name, double value );
         void set( const std::string& name, int value );
         void set( const std::string& name, bool value );
+        void set( const std::string& name, osg::ref_ptr<osg::DoubleArray> value );
         void set( const std::string& name, const AttributeValue& value);
 
         /** Sets the attribute to NULL */         
@@ -221,6 +225,7 @@ namespace osgEarth { namespace Features
         double getDouble( const std::string& name, double defaultValue =0.0 ) const;
         int getInt( const std::string& name, int defaultValue =0 ) const;
         bool getBool( const std::string& name, bool defaultValue =false ) const;
+        osg::ref_ptr<osg::DoubleArray> getDoubleArray( const std::string& name ) const;
 
         /**
          * Gets whether the attribute is set, meaning it is non-NULL

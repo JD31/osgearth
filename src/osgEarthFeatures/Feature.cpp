@@ -100,6 +100,7 @@ AttributeValue::getString() const
         case ATTRTYPE_DOUBLE: return osgEarth::toString(second.doubleValue);
         case ATTRTYPE_INT:    return osgEarth::toString(second.intValue);
         case ATTRTYPE_BOOL:   return osgEarth::toString(second.boolValue);
+        case ATTRTYPE_DOUBLEARRAY: return osgEarth::toString(second.doubleArrayValue);
         case ATTRTYPE_UNSPECIFIED: break;
     }
     return EMPTY_STRING;
@@ -113,6 +114,7 @@ AttributeValue::getDouble( double defaultValue ) const
         case ATTRTYPE_DOUBLE: return second.doubleValue;
         case ATTRTYPE_INT:    return (double)second.intValue;
         case ATTRTYPE_BOOL:   return second.boolValue? 1.0 : 0.0;
+        case ATTRTYPE_DOUBLEARRAY: break;
         case ATTRTYPE_UNSPECIFIED: break;
     }
     return defaultValue;
@@ -126,22 +128,39 @@ AttributeValue::getInt( int defaultValue ) const
         case ATTRTYPE_DOUBLE: return (int)second.doubleValue;
         case ATTRTYPE_INT:    return second.intValue;
         case ATTRTYPE_BOOL:   return second.boolValue? 1 : 0;
+        case ATTRTYPE_DOUBLEARRAY: break;
         case ATTRTYPE_UNSPECIFIED: break;
     }
     return defaultValue;
 }
 
 bool
-AttributeValue::getBool( bool defaultValue ) const 
+AttributeValue::getBool( bool defaultValue ) const
 {
     switch( first ) {
         case ATTRTYPE_STRING: return osgEarth::as<bool>(second.stringValue, defaultValue);
         case ATTRTYPE_DOUBLE: return second.doubleValue != 0.0;
         case ATTRTYPE_INT:    return second.intValue != 0;
         case ATTRTYPE_BOOL:   return second.boolValue;
+        case ATTRTYPE_DOUBLEARRAY: return !second.doubleArrayValue->empty();
         case ATTRTYPE_UNSPECIFIED: break;
     }
     return defaultValue;
+}
+
+osg::ref_ptr<osg::DoubleArray>
+AttributeValue::getDoubleArray() const
+{
+    switch( first ) {
+        case ATTRTYPE_STRING:
+        case ATTRTYPE_DOUBLE:
+        case ATTRTYPE_INT:
+        case ATTRTYPE_BOOL:
+        break;
+        case ATTRTYPE_DOUBLEARRAY: return second.doubleArrayValue;
+        case ATTRTYPE_UNSPECIFIED: break;
+    }
+    return NULL;
 }
 
 //----------------------------------------------------------------------------
@@ -270,6 +289,15 @@ Feature::set( const std::string& name, bool value )
 }
 
 void
+Feature::set( const std::string& name, osg::ref_ptr<osg::DoubleArray> value )
+{
+    AttributeValue& a = _attrs[name];
+    a.first = ATTRTYPE_DOUBLEARRAY;
+    a.second.doubleArrayValue = value;
+    a.second.set = true;
+}
+
+void
 Feature::setNull( const std::string& name)
 {
     AttributeValue& a = _attrs[name];    
@@ -320,6 +348,15 @@ Feature::getBool( const std::string& name, bool defaultValue ) const
     AttributeTable::const_iterator i = _attrs.find(toLower(name));
     return i != _attrs.end()? i->second.getBool(defaultValue) : defaultValue;
 }
+
+
+osg::ref_ptr<osg::DoubleArray>
+Feature::getDoubleArray( const std::string& name ) const
+{
+    AttributeTable::const_iterator i = _attrs.find(toLower(name));
+    return i != _attrs.end()? i->second.getDoubleArray() : NULL;
+}
+
 
 bool
 Feature::isSet( const std::string& name) const
@@ -622,6 +659,17 @@ Feature::getGeoJSON() const
                 if (itr->second.second.set)
                 {
                     props[itr->first] = itr->second.getBool();
+                }
+                else
+                {
+                    props[itr->first] = Json::nullValue;
+                }
+            }
+            else if (itr->second.first == ATTRTYPE_DOUBLEARRAY)
+            {
+                if (itr->second.second.set)
+                {
+                    props[itr->first] = osgEarth::toString(itr->second.getDoubleArray());
                 }
                 else
                 {
