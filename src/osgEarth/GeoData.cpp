@@ -606,7 +606,8 @@ GeoExtent::GeoExtent():
 _west(0.0),
 _width(-1.0),
 _south(0.0),
-_height(-1.0)
+_height(-1.0),
+_largeWidthPatch(false)
 {
     //NOP - invalid
 }
@@ -616,21 +617,24 @@ _srs(srs),
 _west(0.0),
 _width(-1.0),
 _south(0.0),
-_height(-1.0)
+_height(-1.0),
+_largeWidthPatch(false)
 {
     //NOP - invalid
 }
 
 GeoExtent::GeoExtent(const SpatialReference* srs,
                      double west, double south, double east, double north ) :
-_srs( srs )
+_srs( srs ),
+_largeWidthPatch(false)
 {
     set(west, south, east, north);
 }
 
 
 GeoExtent::GeoExtent(const SpatialReference* srs, const Bounds& bounds) :
-_srs( srs )
+_srs( srs ),
+_largeWidthPatch(false)
 {
     set(bounds.xMin(), bounds.yMin(), bounds.xMax(), bounds.yMax());
 }
@@ -640,7 +644,8 @@ _srs(rhs._srs),
 _west(rhs._west),
 _width(rhs._width),
 _south(rhs._south),
-_height(rhs._height)
+_height(rhs._height),
+_largeWidthPatch(rhs._largeWidthPatch)
 {
     //NOP
 }
@@ -668,7 +673,13 @@ GeoExtent::set(double west, double south, double east, double north)
 
     // In this method, east is always to the east of west!
     // If it appears not to be, that means the extent crosses the antimeridian.
-    west = normalizeX(west);
+    // TODO Dirty patch that allows to manage an extend greater than 360
+    _largeWidthPatch = isGeographic() && (east - west) >= 361. && west < -180.1 && east > 180.1;
+    if(! _largeWidthPatch)
+        west = normalizeX(west);
+    else
+        OE_WARN << LC << "Bad extend (width = " << (east - west) << "). Patch is activated." << std::endl;
+
     double width = 0.0;
     double height = 0.0;
 
@@ -744,7 +755,7 @@ GeoExtent::getCentroid(double& out_x, double& out_y) const
 bool
 GeoExtent::crossesAntimeridian() const
 {
-    return _srs.valid() && _srs->isGeographic() && east() < west(); //west()+width() > 180.0;
+    return _srs.valid() && _srs->isGeographic() && (east() < west());// || _largeWidthPatch); //west()+width() > 180.0;
 }
 
 bool
@@ -1261,7 +1272,8 @@ GeoExtent::clamp()
 
     if (isGeographic())
     {
-        _width = osg::clampBetween(_width, 0.0, 360.0);
+        if(! _largeWidthPatch)
+            _width = osg::clampBetween(_width, 0.0, 360.0);
         _height = osg::clampBetween(_height, 0.0, 180.0);
 
         if (south() < -90.0)
