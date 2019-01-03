@@ -22,6 +22,7 @@
 
 #include <osgEarthSymbology/Common>
 #include <osgEarthSymbology/Color>
+#include <osgEarthSymbology/Fill>
 #include <osgEarth/Config>
 #include <osgEarth/Units>
 
@@ -105,6 +106,15 @@ namespace osgEarth { namespace Symbology
         optional<float>& roundingRatio() { return _roundingRatio; }
         const optional<float>& roundingRatio() const { return _roundingRatio; }
 
+        /** Line color 2. */
+        optional<Fill>& color2() { return _color2; }
+        const optional<Fill>& color2() const { return _color2; }
+
+        /** Max altitude threshold before switching to color2. */
+        optional<unsigned>& color2criteriaBelowAlt() { return _color2criteriaBelowAlt; }
+        const optional<unsigned>& color2criteriaBelowAlt() const { return _color2criteriaBelowAlt; }
+
+
     public:
         virtual Config getConfig() const;
         virtual void mergeConfig( const Config& conf );
@@ -119,6 +129,9 @@ namespace osgEarth { namespace Symbology
         optional<unsigned short> _stipplePattern;
         optional<float>          _roundingRatio;
         optional<float>          _minPixels;
+        //Add an alternative color
+        optional<Fill>           _color2;
+        optional<unsigned>       _color2criteriaBelowAlt;
 
         void init();
     };

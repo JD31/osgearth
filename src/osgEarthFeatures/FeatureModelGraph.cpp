@@ -72,6 +72,89 @@ namespace
     };
 }
 
+
+namespace {
+/**
+ * @brief The AltitudeNodeCullCallback class will switch vertex colors depending on a given altitude
+ */
+class AltitudeNodeCullCallback : public osg::NodeCallback {
+      private:
+        int _currentLevel;  // 1 for high, 0 for low
+        int _levelSwitchThreshold;
+        std::vector<Color *> _colors;
+
+        void switchLevel(int level, osg::Node *node) {
+            _currentLevel = level;
+            osg::Geode *geode = node->asGeode();
+
+            if(geode) {
+                for(unsigned int i = 0; i < geode->getNumDrawables(); i++) {
+                    osg::Geometry *geom = geode->getDrawable(i)->asGeometry();
+                    if(geom) {
+                        //                   *** Code not used because there is an unexplained memory consumption
+                        //                   when unzooming the map. UserDataArrays* vertexColors =
+                        //                   dynamic_cast<UserDataArrays*>(geom->getUserData()); if(vertexColors
+                        //                   == nullptr) {
+                        //                       OE_WARN << " AltitudeNodeCullCallback:: unable to find attached
+                        //                       vertex colors, skip geometry \n"; continue;
+                        //                   }
+                        //                   osg::ref_ptr<osg::Array> colours = (level==0) ? vertexColors->_data0
+                        //                   : vertexColors->_data1; geom->setColorArray(colours.get());
+                        //                   geom->setColorBinding(osg::Geometry::BIND_PER_VERTEX);
+
+                        auto* colourArray = (osg::Vec4Array *) geom->getColorArray();
+                        Color* colour = _colors[level];
+                        for(unsigned int j = 0; j < geom->getColorArray()->getNumElements(); j++) {
+                            // fill with level color data
+                            colourArray->at(j)[0] = colour->r();
+                            colourArray->at(j)[1] = colour->g();
+                            colourArray->at(j)[2] = colour->b();
+                            colourArray->at(j)[3] = colour->a();
+                        }
+                        colourArray->dirty();
+                    }
+                }
+            }
+        }
+
+      public:
+        AltitudeNodeCullCallback(int altitude, Color colorHi, Color colorLow)
+            : _levelSwitchThreshold(altitude), _currentLevel(1), _colors(2) {
+            _colors[0] = new Color(colorLow);
+            _colors[1] = new Color(colorHi);
+        }
+
+        void operator()(osg::Node *node, osg::NodeVisitor *nv) override {
+            osgUtil::CullVisitor *cv = Culling::asCullVisitor(nv);
+
+            if(cv) {
+                osg::Camera *camera = cv->getCurrentCamera();
+                if(camera && camera->isRenderToTextureCamera()) {
+                    osg::Camera *refCamera = dynamic_cast<osg::Camera *>(camera->getUserData());
+                    if( refCamera )
+                        camera = refCamera;
+                }
+
+                if(camera && camera->getName() != "osgEarth::RTTPicker") {
+                    double range = 0.;
+                    camera->getUserValue("range", range);
+
+                    if(range < _levelSwitchThreshold && _currentLevel == 1) {
+                        // From high to low
+                        switchLevel(0, node);
+
+                    } else if(range > _levelSwitchThreshold && _currentLevel == 0) {
+                        // From low to high
+                        switchLevel(1, node);
+                    }
+                }
+            }
+
+            traverse(node, nv);
+        }
+    };
+}
+
 //---------------------------------------------------------------------------
 
 // pseudo-loader for paging in feature tiles for a FeatureModelGraph.
@@ -87,7 +170,7 @@ namespace
         return str;
     }
 
-    osg::Group* createPagedNode(const osg::BoundingSphered& bs, 
+    osg::Group* createPagedNode(const osg::BoundingSphered& bs,
                                 const std::string& uri, 
                                 float minRange, 
                                 float maxRange, 
@@ -126,6 +209,7 @@ namespace
         else
         {
             p = new osg::PagedLOD();
+//            p = new PagedLODwithVisibilityRange();
         }
 
         p->setCenter(bs.center());
@@ -874,6 +958,9 @@ FeatureModelGraph::buildSubTilePagedLODs(unsigned        parentLOD,
                         _defaultFileLocationCallback.get(),
                         readOptions,
                         this);
+                    PagedLODwithVisibilityRange* pagedChildNode = dynamic_cast<PagedLODwithVisibilityRange*>(childNode);
+                    if( pagedChildNode )
+                        pagedChildNode->setVisibilityMaxRange(flevel->maxVisibilityRange().get());
                 }
                 else
                 {
@@ -984,6 +1071,84 @@ FeatureModelGraph::writeTileToCache(const std::string&    cacheKey,
     return true;
 }
 
+
+/**
+ * @brief add an AltitudeNodeCullCallback to switch between two color depending of the altitude.
+ * @param extent
+ *      The extent use to do a spatial query.
+ * @param key
+ *      The tile key to support TFS-style queries
+ * @param session
+ *      The session of the an FeatureModelGraph
+ * @param group
+ *      The group of node on which AltitudeNodeCullCallback is apply.
+ * @sa AltitudeNodeCullCallback
+ */
+static void addAltitudeNodeCullCallback(const GeoExtent& extent,
+                                        const TileKey* key,
+                                        const FeatureLevel& level,
+                                        const osg::ref_ptr<Session>& session,
+                                        const osg::ref_ptr<osg::Group>& group)
+{
+    // Search for the current style
+    Style selectedStyle;
+
+    // does the level have a style name set?
+    if ( level.styleName().isSet() )
+    {
+        const Style* style = session->styles()->getStyle( *level.styleName(), false );
+        if ( style )
+        {
+            selectedStyle = *style;
+        }
+        else
+        {
+            const StyleSelector* selector = session->styles()->getSelector( *level.styleName() );
+            if ( selector )
+            {
+                const Style* selectorStyle = session->styles()->getStyle(selector->getSelectedStyleName());
+                if( selectorStyle )
+                    selectedStyle = *selectorStyle;
+            }
+        }
+    }
+
+    else
+    {
+        if ( session->styles()->selectors().size() == 0 )
+        {
+            // attempt to glean the style from the feature source name:
+            selectedStyle = *session->styles()->getStyle(
+                *session->getFeatureSource()->getFeatureSourceOptions().name() );
+        }
+
+        // if the stylesheet has selectors, use the first one
+        // TODO improve
+        else if ( session->styles()->selectors().size() > 0 )
+        {
+            selectedStyle = *session->styles()->getStyle(session->styles()->selectors().front().getSelectedStyleName());
+        }
+    }
+
+    // Search for the symbology
+    LineSymbol* lineSymbol = selectedStyle.get<LineSymbol>();
+    if(lineSymbol && lineSymbol->stroke().isSet() && lineSymbol->stroke()->color2().isSet())
+    {
+        AltitudeNodeCullCallback* altitudeCallback =
+                new AltitudeNodeCullCallback(lineSymbol->stroke()->color2criteriaBelowAlt().get(),
+                                             lineSymbol->stroke()->color(),
+                                             lineSymbol->stroke()->color2().get().color());
+
+        // Add the callback to all geodes in the group.
+        FindNodesVisitor<osg::Geode> visitor;
+        group->accept(visitor);
+        const auto &geodes = visitor._results;
+        for(const auto &geode : geodes)
+            geode->addCullCallback(altitudeCallback);
+    }
+}
+
+
 /**
  * Builds geometry for feature data at a particular level, and constrained by an extent.
  * The extent is either (a) expressed in "extent" literally, as is the case in a non-tiled
@@ -1078,14 +1243,17 @@ FeatureModelGraph::buildTile(const FeatureLevel& level,
         }
 
         // cache it if appropriate.
-        if (_options.nodeCaching() == true)
-        {
+        //if (_options.nodeCaching() == true)
+        //{
             writeTileToCache(cacheKey, group.get(), readOptions);
-        }
+        //}
     }
 
     if ( group->getNumChildren() > 0 )
     {
+        // Install callback to switch the color level of lines depending on the altitude.
+        addAltitudeNodeCullCallback(extent, key, level, _session, group);
+
         // account for a min-range here. Do not address the max-range here; that happens
         // above when generating paged LOD nodes, etc.
         float minRange = level.minRange().get();
