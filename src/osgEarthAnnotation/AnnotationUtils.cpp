@@ -226,7 +226,7 @@ AnnotationUtils::createTextDrawable(const std::string& text,
 #endif
 
         // OSG 3.4.1+ adds a program, so we remove it since we're using VPs.
-        t->setStateSet(0L);
+        //t->setStateSet(0L);
     }
 
     float resFactor = 2.0f;
