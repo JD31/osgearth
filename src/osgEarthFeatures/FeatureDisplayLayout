@@ -53,6 +53,9 @@ namespace osgEarth { namespace Features
         optional<float>& maxRange() { return _maxRange; }
         const optional<float>& maxRange() const { return _maxRange; }
 
+        optional<float>& maxVisibilityRange() { return _maxVisibilityRange; }
+        const optional<float>& maxVisibilityRange() const { return _maxVisibilityRange; }
+
         /** Style class (or style selector) name associated with this level (optional) */
         optional<std::string>& styleName() { return _styleName; }
         const optional<std::string>& styleName() const { return _styleName; }
@@ -69,6 +72,7 @@ namespace osgEarth { namespace Features
 
         optional<float>       _minRange;
         optional<float>       _maxRange;
+        optional<float>       _maxVisibilityRange;
         optional<std::string> _styleName;
     };
 
