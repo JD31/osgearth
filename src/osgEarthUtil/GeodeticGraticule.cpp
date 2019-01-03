@@ -660,6 +660,7 @@ GeodeticGraticule::initLabelPool(CameraData& cdata)
     TextSymbol* text = style.getOrCreateSymbol<TextSymbol>();
     text->alignment() = TextSymbol::ALIGN_CENTER_CENTER;
     text->fill()->color() = options().labelColor().get();
+    text->size() = options().labelSize().get();
     AltitudeSymbol* alt = style.getOrCreateSymbol<AltitudeSymbol>();
     alt->clamping() = AltitudeSymbol::CLAMP_TO_TERRAIN;
 

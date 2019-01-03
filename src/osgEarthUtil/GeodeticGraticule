@@ -46,6 +46,10 @@ namespace osgEarth { namespace Util
         optional<Color>& labelColor() { return _labelColor; }
         const optional<Color>& labelColor() const { return _labelColor; }
 
+        /** Label size */
+        optional<int>& labelSize() { return _labelSize; }
+        const optional<int>& labelSize() const { return _labelSize; }
+
         //! Grid line width in pixels
         optional<float>& lineWidth() { return _lineWidth; }
         const optional<float>& lineWidth() const { return _lineWidth; }
@@ -66,6 +70,7 @@ namespace osgEarth { namespace Util
             _lineWidth.init(2.0f);
             _color.init(Color(Color::Yellow, 0.5f));
             _labelColor.init(Color::White);
+            _labelSize.init(10);
             _gridLines.init(10);
             fromConfig( _conf );
         }
@@ -77,6 +82,7 @@ namespace osgEarth { namespace Util
             conf.addIfSet("line_width", _lineWidth);
             conf.addIfSet("color",      _color);
             conf.addIfSet("label_color", _labelColor );
+            conf.addIfSet("label_size", _labelSize );
             conf.addIfSet("grid_lines", _gridLines);
             conf.addIfSet("resolutions", _resolutions);
             return conf;
@@ -92,6 +98,7 @@ namespace osgEarth { namespace Util
             conf.getIfSet("line_width", _lineWidth);
             conf.getIfSet("color",      _color);
             conf.getIfSet("label_color", _labelColor);
+            conf.getIfSet("label_size", _labelSize );
             conf.getIfSet("grid_lines", _gridLines);
             conf.getIfSet("resolutions", _resolutions);
         }
@@ -99,6 +106,7 @@ namespace osgEarth { namespace Util
         optional<float>       _lineWidth;
         optional<Color>       _color;
         optional<Color>       _labelColor;
+        optional<int>         _labelSize;
         optional<int>         _gridLines;
         optional<std::string> _resolutions;
     };
