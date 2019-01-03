@@ -72,6 +72,12 @@ namespace osgEarth { namespace Symbology
             LAYOUT_VERTICAL
         };
 
+        enum AutoOffsetPreferedPosition {
+            CENTER,
+            LEFT,
+            RIGHT
+        };
+
         META_Object(osgEarthSymbology, TextSymbol);
 
         TextSymbol(const TextSymbol& rhs,const osg::CopyOp& copyop=osg::CopyOp::SHALLOW_COPY);
@@ -156,6 +162,32 @@ namespace osgEarth { namespace Symbology
         optional<Encoding>& encoding() { return _encoding; }
         const optional<Encoding>& encoding() const { return _encoding; }
 
+        /**
+         * Whether to enable the automatic label placement along a line and on screen
+         * Note: The feature must be one straigth line and short enough as the algorithm considers it straigth on screen
+         */
+        optional<bool>& autoOffsetAlongLine() { return _autoOffsetAlongLine; }
+        const optional<bool>& autoOffsetAlongLine() const { return _autoOffsetAlongLine; }
+
+        /**
+         * Initial and prefered position of the sliding label
+         */
+        optional<AutoOffsetPreferedPosition>& autoOffsetPreferedPosition() { return _autoOffsetPreferedPosition; }
+        const optional<AutoOffsetPreferedPosition>& autoOffsetPreferedPosition() const { return _autoOffsetPreferedPosition; }
+
+        /**
+         * Whether to enable the automatic label rotation along a line
+         * Note: The feature must be one straigth line and short enough as the algorithm considers it straigth on screen
+         */
+        optional<bool>& autoRotateAlongLine() { return _autoRotateAlongLine; }
+        const optional<bool>& autoRotateAlongLine() const { return _autoRotateAlongLine; }
+
+        /**
+         * The geometry in WKT on which the auto offset algorithm must rely
+         */
+        optional<StringExpression>& autoOffsetGeomWKT() { return _autoOffsetGeomWKT; }
+        const optional<StringExpression>& autoOffsetGeomWKT() const { return _autoOffsetGeomWKT; }
+
     public:
         virtual Config getConfig() const;
         virtual void mergeConfig( const Config& conf );
@@ -181,6 +213,10 @@ namespace osgEarth { namespace Symbology
         optional<bool>              _declutter;
         optional<bool>              _occlusionCull;
         optional<double>            _occlusionCullAltitude;
+        optional<bool>              _autoOffsetAlongLine;
+        optional<AutoOffsetPreferedPosition>    _autoOffsetPreferedPosition;
+        optional<bool>              _autoRotateAlongLine;
+        optional<StringExpression>  _autoOffsetGeomWKT;
     };
 
 } } // namespace osgEarth::Symbology
