@@ -423,8 +423,10 @@ public:
       }
 
       virtual void operator()(ProgressCallback* progress )
-      {         
-          system(_command.c_str());     
+      {
+          #ifndef __IOS__
+          system(_command.c_str());
+          #endif
 
           // Cleanup the temp files and increment the progress on the visitor.
           cleanupTempFiles();
