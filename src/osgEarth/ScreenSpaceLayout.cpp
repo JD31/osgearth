@@ -688,8 +688,8 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback {
 
             // fully out of viewport
             bool isViewCulled = false;
-            if (box.xMax() < 0 || box.xMin() > refVP->width() || box.yMax() < 0 ||
-                box.yMin() > refVP->height()) {
+            if (box.xMax() < refVP->x() || box.xMin() > refVP->x() + refVP->width() || 
+                box.yMax() < refVP->y() || box.yMin() > refVP->y() + refVP->height()) {
                 visible = false;
                 isViewCulled = true;
             }
