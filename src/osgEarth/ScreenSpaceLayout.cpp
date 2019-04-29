@@ -270,10 +270,10 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback {
 
         // inits
         const ScreenSpaceLayoutOptions& options = _context->_options;
-        float leftMin = *options.leftMargin() - box.xMin() + offset.x();
-        float rightMax = -*options.rightMargin() + vp->width() - box.xMax() + offset.x();
-        float bottomMin = *options.bottomMargin() - box.yMin() + offset.y();
-        float topMax = -*options.topMargin() + vp->height() - box.yMax() + offset.y();
+        float leftMin = *options.leftMargin()  + vp->x() - box.xMin() + offset.x();
+        float rightMax = -*options.rightMargin() + vp->x() + vp->width() - box.xMax() + offset.x();
+        float bottomMin = *options.bottomMargin() + vp->y() - box.yMin() + offset.y();
+        float topMax = -*options.topMargin() + vp->y() + vp->height() - box.yMax() + offset.y();
         bool isResolved = false;
         bool maxPointIsDef = false;
         osg::Vec3d linePt;
