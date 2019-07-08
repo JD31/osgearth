@@ -80,6 +80,7 @@ namespace osgEarth { namespace Annotation
 
         Style _style;
         osg::ref_ptr<const osgDB::Options> _dbOptions;
+        osg::ref_ptr<osg::Image>           _image;
 
         void init();
 

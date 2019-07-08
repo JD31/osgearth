@@ -47,7 +47,8 @@ ModelNode::ModelNode(MapNode*              mapNode,
                      const osgDB::Options* dbOptions ) :
 GeoPositionNode( mapNode ),
 _style       ( style ),
-_dbOptions   ( dbOptions )
+_dbOptions   ( dbOptions ),
+_image       (nullptr)  
 {
     init();
 }
@@ -99,6 +100,42 @@ ModelNode::init()
                     tempOptions->setReadFileCallback( new URIAliasMapReadCallback(*sym->uriAliasMap(), uri.full()) );
                     node = uri.getNode( tempOptions.get() );
                 }
+                //try to load an image from the uri provided
+                if ( !node.valid() && ! _image.valid() )
+                {
+                     OE_DEBUG << LC << "try to load image " << uri.full() << std::endl;
+                     _image = uri.getImage();
+                      
+                        if( _image.valid() )
+                        {
+                            OE_DEBUG << LC << "creating image geometry " << std::endl;
+                            osg::ref_ptr<osg::Geode> geode = new osg::Geode();
+                            geode->setName( "Image Geode" );
+                          
+                            //try to create a geometry for this image (same geom as Placenode)
+                            osg::Vec2s offset(0.0,0.0);
+                            osg::Geometry* imageGeom = AnnotationUtils::createImageGeometry( _image.get(), offset, 0, 0.0, 1.0 );
+                            if ( imageGeom )
+                            {  
+                                imageGeom->setName( "Image Geometry" );
+                                OE_DEBUG << LC << "adding image geometry to scenegraph " << uri.full() << std::endl;
+                                geode->addDrawable( imageGeom );
+                                
+                                node = geode;
+                            }
+                            else
+                            {
+                                OE_WARN << LC << "Could not create geometry for the image " << uri.full() << std::endl;
+                            }
+                        }
+                        else
+                        {
+                            OE_WARN << LC << "Could not load model as image " << uri.full() << std::endl;
+                        }
+                    
+                }
+                
+                
 
                 if ( !node.valid() )
                 {
