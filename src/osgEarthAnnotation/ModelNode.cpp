@@ -257,28 +257,28 @@ void ModelNode::replaceImage(const URI &uri)
     if( _image.valid() )
     {
         OE_DEBUG << LC << "creating image geometry " << std::endl;
-        osg::Geode* geode = _node->asGeode();
-        if (geode) {
+        osg::ref_ptr<osg::Geode> geode = _node->asGeode();
+        if ( geode.valid() ) {
             geode->setName( "Image Geode" );
 
             //try to create a geometry for this image (same geom as Placenode)
             osg::Vec2s offset(0.0,0.0);
-            osg::Geometry* imageGeom = AnnotationUtils::createImageGeometry( _image.get(), offset, 0, 0.0, 1.0 );
-            if ( imageGeom )
+            osg::ref_ptr<osg::Geometry> imageGeom = AnnotationUtils::createImageGeometry( _image.get(), offset, 0, 0.0, 1.0 );
+            if ( imageGeom.valid() )
             {
                 imageGeom->setName( "Image Geometry" );
                 OE_DEBUG << LC << "adding image geometry to scenegraph " << uri.full() << std::endl;
 
-                osg::Drawable* drawable = geode->getDrawable(0);
+                osg::ref_ptr<osg::Drawable> drawable = geode->getDrawable(0);
                 if (drawable) {
                     OE_DEBUG << LC << "drawable found, replacing it " << std::endl;
                     bool ret = geode->replaceDrawable(drawable, imageGeom);
                     OE_DEBUG << LC << "replacement success " << ret << std::endl;
                 } else {
-                    geode->addDrawable( imageGeom );
+                    geode->addDrawable( imageGeom.get() );
                 }
 
-                _node = geode;
+                _node = geode.get();
             } else
             {
                 OE_WARN << LC << "Could not create geometry for the image " << uri.full() << std::endl;
@@ -324,6 +324,8 @@ ModelNode::setAutoScale(bool autoScale, double minAutoScale, double maxAutoScale
         this->setCullingActive(false);
         _cullCallback = new GeoPositionNodeAutoScaler( osg::Vec3d(1,1,1), minAutoScale, maxAutoScale );
         this->addCullCallback(_cullCallback.get());
+    } else {
+        this->setCullingActive(true);
     }
 }
 
