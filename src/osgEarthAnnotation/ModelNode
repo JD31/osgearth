@@ -85,7 +85,6 @@ protected:
     Style _style;
     osg::ref_ptr<const osgDB::Options>      _dbOptions;
     osg::ref_ptr<osg::Image>                _image;
-    osg::observer_ptr<osg::Node>            _node;
     osg::observer_ptr<osg::NodeCallback>    _cullCallback;
 
     void init();
