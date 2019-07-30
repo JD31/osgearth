@@ -202,7 +202,7 @@ ModelNode::init()
 
                 this->applyRenderSymbology( _style );
 
-                _node = node;
+            
             }
             else
             {
@@ -253,57 +253,77 @@ ModelNode::getConfig() const
 
 void ModelNode::replaceImage(const URI &uri)
 {
-    _image = uri.getImage();
+    _image = uri.getImage();    
+    
+    if(getPositionAttitudeTransform()->getNumChildren()==0)
+    {
+         OE_WARN << LC << "replaceImage: PositionAttitudeTransform has no child " << std::endl;
+        return;
+    }
+    osg::ref_ptr<osg::Node> node = getPositionAttitudeTransform()->getChild(0);
+     
     if( _image.valid() )
     {
-        OE_DEBUG << LC << "creating image geometry " << std::endl;
-        osg::ref_ptr<osg::Geode> geode = _node->asGeode();
-        if ( geode.valid() ) {
-            geode->setName( "Image Geode" );
-
-            //try to create a geometry for this image (same geom as Placenode)
-            osg::Vec2s offset(0.0,0.0);
-            osg::ref_ptr<osg::Geometry> imageGeom = AnnotationUtils::createImageGeometry( _image.get(), offset, 0, 0.0, 1.0 );
-            if ( imageGeom.valid() )
+        
+        if(node.valid())
+        {
+            OE_DEBUG << LC << "creating image geometry " << std::endl;
+            osg::ref_ptr<osg::Geode> geode = node->asGeode();
+            if ( geode.valid() ) 
             {
-                imageGeom->setName( "Image Geometry" );
-                OE_DEBUG << LC << "adding image geometry to scenegraph " << uri.full() << std::endl;
-
-                osg::ref_ptr<osg::Drawable> drawable = geode->getDrawable(0);
-                if (drawable) {
-                    OE_DEBUG << LC << "drawable found, replacing it " << std::endl;
-                    bool ret = geode->replaceDrawable(drawable, imageGeom);
-                    OE_DEBUG << LC << "replacement success " << ret << std::endl;
-                } else {
-                    geode->addDrawable( imageGeom.get() );
+                geode->setName( "Image Geode" );
+    
+                //try to create a geometry for this image (same geom as Placenode)
+                osg::Vec2s offset(0.0,0.0);
+                osg::ref_ptr<osg::Geometry> imageGeom = AnnotationUtils::createImageGeometry( _image.get(), offset, 0, 0.0, 1.0 );
+                if ( imageGeom.valid() )
+                {
+                    imageGeom->setName( "Image Geometry" );
+                    OE_DEBUG << LC << "adding image geometry to scenegraph " << uri.full() << std::endl;
+    
+                    osg::ref_ptr<osg::Drawable> drawable = geode->getDrawable(0);
+                    if (drawable) {
+                        OE_DEBUG << LC << "drawable found, replacing it " << std::endl;
+                        bool ret = geode->replaceDrawable(drawable, imageGeom);
+                        OE_DEBUG << LC << "replacement success " << ret << std::endl;
+                    } else {
+                        geode->addDrawable( imageGeom.get() );
+                    }
+                    
+                    if ( node.valid() )
+                    {
+                        if ( Registry::capabilities().supportsGLSL() )
+                        {
+                            // generate shader code for the loaded model:
+                            Registry::shaderGenerator().run(
+                                node.get(),
+                                "osgEarth.ModelNode",
+                                Registry::stateSetCache() );
+                        }
+                    }
+    
+                   
+                } else
+                {
+                    OE_WARN << LC << "replaceImage: Could not create geometry for the image " << uri.full() << std::endl;
                 }
-
-                _node = geode.get();
             } else
             {
-                OE_WARN << LC << "Could not create geometry for the image " << uri.full() << std::endl;
+                OE_WARN << LC << "replaceImage: Node is not a geode " << std::endl;
             }
-        } else
-        {
-            OE_WARN << LC << "Node is not a geode " << std::endl;
         }
+        else
+        {
+            OE_WARN << LC << "replaceImage: No valid Node found " << std::endl;
+        }
+      
     }
     else
     {
-        OE_WARN << LC << "Could not load model as image " << uri.full() << std::endl;
+        OE_WARN << LC << "replaceImage: Could not load model as image " << uri.full() << std::endl;
     }
 
-    if ( _node.valid() )
-    {
-        if ( Registry::capabilities().supportsGLSL() )
-        {
-            // generate shader code for the loaded model:
-            Registry::shaderGenerator().run(
-                _node.get(),
-                "osgEarth.ModelNode",
-                Registry::stateSetCache() );
-        }
-    }
+   
 }
 
 void
